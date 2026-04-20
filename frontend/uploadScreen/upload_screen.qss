@@ -1,0 +1,15 @@
+QPushButton#selectButton {
+    background-color: orange;
+    color: white;
+    font-size: 18px;
+    font-weight: bold;
+    border-radius: 10px;    
+}
+
+QPushButton#selectButton:hover {
+    background-color: darkorange; 
+}
+
+QPushButton#selectButton:pressed {
+    background-color: #cc7000;
+}
