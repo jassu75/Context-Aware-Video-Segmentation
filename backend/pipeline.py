@@ -1,0 +1,217 @@
+"""
+pipeline.py — top-level driver for the analysis pipeline.
+
+Given a video file, this runs the three analyzers (audio, text, scene
+detection) in parallel, then feeds their outputs to the classifier and
+returns a labeled timeline.
+
+Threads (not processes) because all three workers spend their time in
+C/C++ extensions that release the GIL — numpy/scipy for librosa,
+PyTorch for Whisper, OpenCV for PySceneDetect. Threads keep memory and
+startup costs low; processes would re-load Whisper per child.
+
+Typical use from the UI thread:
+
+    from backend.pipeline import analyze_video
+    result = analyze_video("path/to/video.mp4", output_dir="analysis/")
+
+Author: Jesus Ramos
+"""
+
+from __future__ import annotations
+
+import json
+import sys
+import time
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
+
+from backend.audio.audio_processor       import process_video as run_audio_processor
+from backend.text.text_processor         import process_video as run_text_processor
+from backend.sceneDetector.sceneDetector import ImageSceneDetector
+from backend.classifier.classifier       import classify
+
+# video_processor lives on Tejas's feature branch and may not be in main yet.
+# Importing optionally lets the pipeline still run on machines that don't
+# have it. If it's missing, we just pass video_data=None to the classifier.
+try:
+    from backend.video.video_processor import VideoProcessor
+    _HAS_VIDEO_PROCESSOR = True
+except ImportError as _e:
+    print(f"[pipeline] video_processor not available - running without it ({_e})")
+    _HAS_VIDEO_PROCESSOR = False
+
+
+# ==== Public API ========================================================
+
+def analyze_video(video_path, output_dir=None, write_intermediates: bool = True) -> dict:
+    """
+    Run the full analysis pipeline on one video.
+
+    Parameters
+    ----------
+    video_path : str | Path
+        Path to the source video file.
+    output_dir : str | Path | None
+        Where to write JSON outputs. Defaults to "<video_dir>/analysis/".
+    write_intermediates : bool
+        If True, also dumps the raw audio/text/scene JSONs alongside the
+        final timeline. Handy for debugging and UI visualization.
+
+    Returns
+    -------
+    dict with a "timeline_segments" list (see classifier.classify docstring).
+    """
+    video_path = Path(video_path)
+    if not video_path.exists():
+        raise FileNotFoundError(f"Video not found: {video_path}")
+
+    out_dir = Path(output_dir) if output_dir else video_path.parent / "analysis"
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    print(f"[pipeline] video: {video_path.name}")
+    print(f"[pipeline] output dir: {out_dir}")
+
+    t_start = time.time()
+
+    # Fire off every analyzer at once. Video joins if its module is available.
+    n_workers = 4 if _HAS_VIDEO_PROCESSOR else 3
+    with ThreadPoolExecutor(max_workers=n_workers) as pool:
+        fut_audio = pool.submit(_run_audio, video_path, out_dir)
+        fut_text  = pool.submit(_run_text,  video_path, out_dir)
+        fut_scene = pool.submit(_run_scene, video_path, out_dir)
+        fut_video = pool.submit(_run_video, video_path, out_dir) if _HAS_VIDEO_PROCESSOR else None
+
+        # .result() re-raises any exception from the worker, so one
+        # failure stops the whole pipeline. Good default — swap to a
+        # try/except per future if you want partial-result behavior.
+        audio_data = fut_audio.result()
+        text_data  = fut_text.result()
+        scene_data = fut_scene.result()
+        video_data = fut_video.result() if fut_video else None
+
+    print(f"[pipeline] all analyzers finished in {time.time() - t_start:.1f}s")
+
+    print("[pipeline] fusing modalities via classifier")
+    timeline = classify(audio_data, text_data, scene_data, video_data)
+
+    if write_intermediates:
+        timeline_path = out_dir / f"{video_path.stem}_timeline.json"
+        _write_json(timeline_path, timeline)
+        print(f"[pipeline] timeline written to {timeline_path}")
+
+    total = time.time() - t_start
+    print(f"[pipeline] done in {total:.1f}s  ({len(timeline['timeline_segments'])} segments)")
+    return timeline
+
+
+# ==== Per-modality wrappers =============================================
+# Thin adapters around each module. If a module's entry point ever
+# changes, update it here — the rest of the pipeline doesn't need to know.
+
+def _run_audio(video_path: Path, out_dir: Path) -> dict:
+    print("[audio] starting")
+    t = time.time()
+    audio_json_path = out_dir / f"{video_path.stem}_audio.json"
+    data = run_audio_processor(str(video_path), str(audio_json_path))
+    print(f"[audio] done in {time.time() - t:.1f}s")
+    return data
+
+
+def _run_text(video_path: Path, out_dir: Path) -> dict:
+    print("[text] starting")
+    t = time.time()
+    text_json_path = out_dir / f"{video_path.stem}_text.json"
+    data = run_text_processor(str(video_path), str(text_json_path))
+    print(f"[text] done in {time.time() - t:.1f}s")
+    return data
+
+
+def _run_video(video_path: Path, out_dir: Path) -> dict:
+    """Run Tejas's per-window visual feature extractor."""
+    print("[video] starting")
+    t = time.time()
+
+    processor = VideoProcessor(str(video_path), window_sec=2.0, hop_sec=1.0, frame_count=4)
+    windows, video_info = processor.extract()
+    data = processor.to_json_dict(windows, video_info)
+
+    video_json_path = out_dir / f"{video_path.stem}_video.json"
+    _write_json(video_json_path, data)
+
+    print(f"[video] done in {time.time() - t:.1f}s")
+    return data
+
+
+def _run_scene(video_path: Path, out_dir: Path) -> dict:
+    print("[scene] starting")
+    t = time.time()
+
+    detector = ImageSceneDetector(str(video_path))
+    raw_scenes = detector.get_scene_data_as_list()
+
+    # sceneDetector returns tuples: (start_frame, start_tc, end_frame, end_tc).
+    # Normalize into the shape the classifier expects.
+    scenes = []
+    for start_frame, start_tc, end_frame, end_tc in raw_scenes:
+        scenes.append({
+            "start_frame": int(start_frame),
+            "end_frame":   int(end_frame),
+            "start_s":     _timecode_to_seconds(start_tc),
+            "end_s":       _timecode_to_seconds(end_tc),
+        })
+
+    data = {
+        "video":       video_path.stem,
+        "source_file": str(video_path),
+        "num_scenes":  len(scenes),
+        "scenes":      scenes,
+    }
+
+    scene_json_path = out_dir / f"{video_path.stem}_scenes.json"
+    _write_json(scene_json_path, data)
+
+    print(f"[scene] done in {time.time() - t:.1f}s  ({len(scenes)} scenes)")
+    return data
+
+
+# ==== Utility helpers ===================================================
+
+def _timecode_to_seconds(tc) -> float:
+    """Handle scenedetect FrameTimecode objects and plain numbers."""
+    if hasattr(tc, "get_seconds"):
+        return float(tc.get_seconds())
+    return float(tc)
+
+
+def _write_json(path: Path, data: dict) -> None:
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2, default=str)
+
+
+# ==== CLI entry point ===================================================
+
+def _print_usage():
+    print("Usage: python -m backend.pipeline <video_path> [output_dir]")
+
+
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        _print_usage()
+        sys.exit(1)
+
+    video = sys.argv[1]
+    out   = sys.argv[2] if len(sys.argv) > 2 else None
+
+    cli_start = time.time()
+    result = analyze_video(video, output_dir=out)
+
+    print("\n---- timeline summary ----")
+    for seg in result["timeline_segments"]:
+        print(f"  {seg['type']:14s}  "
+              f"{seg['start_seconds']:7.2f}s – {seg['end_seconds']:7.2f}s  "
+              f"({seg['duration_seconds']:.1f}s)")
+
+    total_elapsed = time.time() - cli_start
+    mins, secs = divmod(total_elapsed, 60)
+    print(f"\n[pipeline] TOTAL elapsed: {int(mins)}m {secs:.1f}s  ({total_elapsed:.1f}s)")
