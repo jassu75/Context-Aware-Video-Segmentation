@@ -15,7 +15,6 @@ from backend.classifier._shared import at, scenes_from, windows_from
 
 
 LABEL = "ad_break"
-MAX_SCORE = 10.0
 
 
 # Ground-truth ads in the supplied set are about 28s-118s. Keep the range a
@@ -50,7 +49,6 @@ def score(audio_data, text_data, scene_data, video_data, scores):
             if _overlap(win_start, win_end, cand["start"], cand["end"]) > 0:
                 s = max(s, cand["score"])
 
-        s = min(s, MAX_SCORE)
         row[LABEL] = round(s, 2)
         results.append({
             "window_index": row["window_index"],

@@ -26,7 +26,6 @@ from backend.classifier._shared import (
 
 
 LABEL = "self_promo"
-MAX_SCORE = 10.0
 
 
 # ==== Phrase patterns ====================================================
@@ -51,7 +50,7 @@ SELF_PROMO_PATTERNS = [
 
 # ==== Per-rule point allocations ========================================
 
-PTS_SELF_PROMO_KEYWORD   = 6.0   # the anchor: audience action / channel CTA
+PTS_SELF_PROMO_KEYWORD   = 5.0   # the anchor: audience action / channel CTA
 PTS_POSITION_INTRO_OUTRO = 2.0   # window sits in first or last X seconds
 PTS_INTRO_OUTRO_KEYWORD  = 1.0   # often co-occurs ("welcome back", "see you")
 PTS_SPEECH_HEAVY         = 1.0   # host directly talking to camera
@@ -131,7 +130,6 @@ def score(audio_data, text_data, scene_data, video_data, scores):
             if abs(ratio - 1.0) < RMS_BASELINE_TOLERANCE:
                 s += PTS_AUDIO_BASELINE
 
-        s = min(s, MAX_SCORE)
         row[LABEL] = round(s, 2)
         results.append({
             "window_index": row["window_index"],

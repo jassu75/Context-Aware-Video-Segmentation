@@ -17,7 +17,6 @@ from backend.classifier._shared import (
 
 
 LABEL = "recap"
-MAX_SCORE = 10.0
 
 
 # ==== Phrase patterns ====================================================
@@ -38,7 +37,7 @@ RECAP_PATTERNS = [
 
 # ==== Per-rule point allocations ========================================
 
-PTS_RECAP_KEYWORD = 5.5
+PTS_RECAP_KEYWORD = 5.0
 PTS_REPEATED_BOILERPLATE = 5.0
 PTS_POSITION_INTRO = 2.5
 PTS_NARRATION_SPEECH = 1.0
@@ -80,10 +79,12 @@ def score(audio_data, text_data, scene_data, video_data, scores):
         # Generic filler words like "anyway" are intentionally ignored.
         if text_w and (has_recap_keyword or has_repeated_boilerplate):
             feats = text_w.get("features", {})
+            primary_evidence = 0.0
             if has_recap_keyword:
-                s += PTS_RECAP_KEYWORD
+                primary_evidence = max(primary_evidence, PTS_RECAP_KEYWORD)
             if has_repeated_boilerplate:
-                s += PTS_REPEATED_BOILERPLATE
+                primary_evidence = max(primary_evidence, PTS_REPEATED_BOILERPLATE)
+            s += primary_evidence
 
             if win_start < RECAP_INTRO_DURATION_SEC:
                 s += PTS_POSITION_INTRO
@@ -101,7 +102,6 @@ def score(audio_data, text_data, scene_data, video_data, scores):
             if MODERATE_DENSITY_MIN <= density <= MODERATE_DENSITY_MAX:
                 s += PTS_MODERATE_SHOT_DENSITY
 
-        s = min(s, MAX_SCORE)
         row[LABEL] = round(s, 2)
         results.append({
             "window_index": row["window_index"],

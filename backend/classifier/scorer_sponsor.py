@@ -15,7 +15,6 @@ from backend.classifier._shared import at, windows_from
 
 
 LABEL = "sponsor"
-MAX_SCORE = 10.0
 
 
 # ==== Per-rule point allocations ========================================
@@ -64,7 +63,6 @@ def score(audio_data, text_data, scene_data, video_data, scores):
                 if wc / window_dur >= SPEECH_CONTEXT_WPS:
                     s += PTS_SPEECH_CONTEXT
 
-        s = min(s, MAX_SCORE)
         row[LABEL] = round(s, 2)
         results.append({
             "window_index": row["window_index"],
