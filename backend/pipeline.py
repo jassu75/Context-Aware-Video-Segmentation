@@ -21,10 +21,10 @@ Author: Jesus Ramos
 from __future__ import annotations
 
 import json
-import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+import argparse
 
 from backend.audio.audio_processor       import process_video as run_audio_processor
 from backend.text.text_processor         import process_video as run_text_processor
@@ -44,7 +44,7 @@ except ImportError as _e:
 
 # ==== Public API ========================================================
 
-def analyze_video(video_path, output_dir=None, write_intermediates: bool = True) -> dict:
+def analyze_video(video_path, output_dir=None, write_intermediates: bool = True, debug: bool = False) -> dict:
     """
     Run the full analysis pipeline on one video.
 
@@ -93,7 +93,7 @@ def analyze_video(video_path, output_dir=None, write_intermediates: bool = True)
     print(f"[pipeline] all analyzers finished in {time.time() - t_start:.1f}s")
 
     print("[pipeline] fusing modalities via classifier")
-    timeline = classify(audio_data, text_data, scene_data, video_data)
+    timeline = classify(audio_data, text_data, scene_data, video_data, debug=debug)
 
     if write_intermediates:
         timeline_path = out_dir / f"{video_path.stem}_timeline.json"
@@ -148,17 +148,17 @@ def _run_scene(video_path: Path, out_dir: Path) -> dict:
     t = time.time()
 
     detector = ImageSceneDetector(str(video_path))
-    raw_scenes = detector.get_scene_data_as_list()
+    raw_scenes = detector.get_scene_data()
 
     # sceneDetector returns tuples: (start_frame, start_tc, end_frame, end_tc).
     # Normalize into the shape the classifier expects.
     scenes = []
-    for start_frame, start_tc, end_frame, end_tc in raw_scenes:
+    for scene in raw_scenes:
         scenes.append({
-            "start_frame": int(start_frame),
-            "end_frame":   int(end_frame),
-            "start_s":     _timecode_to_seconds(start_tc),
-            "end_s":       _timecode_to_seconds(end_tc),
+            "start_frame": int(scene["start_frame"]),
+            "end_frame":   int(scene["end_frame"]),
+            "start_s":     float(scene["start_time_seconds"]),
+            "end_s":       float(scene["end_time_seconds"]),
         })
 
     data = {
@@ -196,21 +196,55 @@ def _print_usage():
 
 
 if __name__ == "__main__":
-    if len(sys.argv) < 2:
-        _print_usage()
-        sys.exit(1)
 
-    video = sys.argv[1]
-    out   = sys.argv[2] if len(sys.argv) > 2 else None
+    parser = argparse.ArgumentParser(
+        description="Run full video analysis pipeline"
+    )
+
+    parser.add_argument(
+        "video_path",
+        type=str,
+        help="Path to input video file"
+    )
+
+    parser.add_argument(
+        "output_dir",
+        type=str,
+        nargs="?",
+        default=None,
+        help="Optional output directory"
+    )
+
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="Enable debug output for scorers"
+    )
+
+    parser.add_argument(
+        "--no-write",
+        action="store_true",
+        help="Do not write intermediate JSON files"
+    )
+
+    args = parser.parse_args()
 
     cli_start = time.time()
-    result = analyze_video(video, output_dir=out)
+
+    result = analyze_video(
+        args.video_path,
+        output_dir=args.output_dir,
+        debug=args.debug,
+        write_intermediates=not args.no_write
+    )
 
     print("\n---- timeline summary ----")
     for seg in result["timeline_segments"]:
-        print(f"  {seg['type']:14s}  "
-              f"{seg['start_seconds']:7.2f}s – {seg['end_seconds']:7.2f}s  "
-              f"({seg['duration_seconds']:.1f}s)")
+        print(
+            f"  {seg['type']:14s}  "
+            f"{seg['start_seconds']:7.2f}s – {seg['end_seconds']:7.2f}s  "
+            f"({seg['duration_seconds']:.1f}s)"
+        )
 
     total_elapsed = time.time() - cli_start
     mins, secs = divmod(total_elapsed, 60)

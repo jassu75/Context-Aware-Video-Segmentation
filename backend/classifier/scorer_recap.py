@@ -58,7 +58,7 @@ MODERATE_DENSITY_MAX = 0.30
 
 # ==== Scoring ===========================================================
 
-def score(audio_data, text_data, scene_data, video_data, scores):
+def score(audio_data, text_data, scene_data, video_data, scores, debug=False):
     text_windows = windows_from(text_data)
     repeated_indices = _repeated_boilerplate_indices(text_windows)
     duration = _video_duration(text_data, scores)

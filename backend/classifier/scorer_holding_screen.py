@@ -17,7 +17,7 @@ MIN_SILENCE_DURATION = 5
 
 # ==== Scoring ===========================================================
 
-def score(audio_data, text_data, scene_data, video_data, scores):
+def score(audio_data, text_data, scene_data, video_data, scores, debug=False):
     audio_windows = windows_from(audio_data)
     text_windows = windows_from(text_data)
     video_windows = windows_from(video_data)
