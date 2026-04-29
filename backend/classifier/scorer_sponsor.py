@@ -31,7 +31,7 @@ PTS_SPEECH_CONTEXT = 1.0
 SPEECH_CONTEXT_WPS = 0.75
 
 
-def score(audio_data, text_data, scene_data, video_data, scores):
+def score(audio_data, text_data, scene_data, video_data, scores,debug=False):
     """
     Score every window 0-10 for spoken sponsor-read likelihood.
 

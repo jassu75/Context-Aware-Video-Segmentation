@@ -48,12 +48,15 @@ MIN_LABEL_SCORE = 4.0
 # tiny segments because some windows land just below threshold.
 SMOOTHING_MAX_GAP_WINDOWS = 2
 
-# Drop non-content segments shorter than this — likely false positives or
-# stray windows that didn't form a real run.
-MIN_NON_CONTENT_DURATION_SEC = 3.0
+# Default minimum duration (fallback)
+DEFAULT_MIN_DURATION_SEC = 3.0
 
-# Tie-break order when two categories score the same on a window.
-# Higher in the list wins. Anything not listed falls to the bottom.
+# Per-label minimum durations
+MIN_DURATION_BY_LABEL = {
+    "intro": 6.0,
+    "outro": 3.0,
+}
+
 CATEGORY_PRIORITY = [
     "ad_break",
     "sponsor",
@@ -66,6 +69,12 @@ CATEGORY_PRIORITY = [
     "transition",
     "filler",
 ]
+
+# Positional constraints
+POSITION_CONSTRAINTS = {
+    "intro": "start_only",
+    "outro": "end_only",
+}
 
 
 # ==== Scorer registration ===============================================
@@ -96,7 +105,7 @@ for _name in _EXPECTED_SCORERS:
 
 # ==== Public API ========================================================
 
-def classify(audio_data, text_data, scene_data, video_data=None) -> dict:
+def classify(audio_data, text_data, scene_data, video_data=None, debug: bool = False) -> dict:
     """
     Run every registered scorer, label each window, and merge into segments.
 
@@ -110,15 +119,23 @@ def classify(audio_data, text_data, scene_data, video_data=None) -> dict:
 
     # Each scorer mutates `scores` in place AND returns its own list.
     per_category_results = {}
-    for mod in ENABLED_SCORERS:
-        per_category_results[mod.LABEL] = mod.score(
-            audio_data, text_data, scene_data, video_data, scores
-        )
+    window_debug = {i: {} for i in range(len(scores))}
 
-    labeled_windows = _label_windows(scores)
+    for mod in ENABLED_SCORERS:
+        results = mod.score(audio_data, text_data, scene_data, video_data, scores, debug=debug)
+
+        per_category_results[mod.LABEL] = results
+
+        if debug:
+            for r in results:
+                i = r["window_index"]
+                window_debug[i][mod.LABEL] = r.get("debug")
+
+    labeled_windows = _label_windows(scores, window_debug if debug else None)
     labeled_windows = _smooth_labels(labeled_windows, SMOOTHING_MAX_GAP_WINDOWS)
     segments        = _merge_to_segments(labeled_windows)
-    segments        = _drop_short_non_content(segments, MIN_NON_CONTENT_DURATION_SEC)
+    segments        = _enforce_position_constraints(segments)
+    segments        = _drop_short_non_content(segments, DEFAULT_MIN_DURATION_SEC)
 
     return {
         "windows":             labeled_windows,
@@ -167,30 +184,31 @@ def _init_scores(audio_data, text_data, video_data) -> list[dict]:
 
 # ==== Labeling ==========================================================
 
-def _label_windows(scores) -> list[dict]:
+def _label_windows(scores, window_debug=None) -> list[dict]:
     """
     Pick the winning category per window. Highest score wins; ties go
     to whichever category is earlier in CATEGORY_PRIORITY. If the
     winner doesn't clear MIN_LABEL_SCORE, the window is content.
     """
-    priority_index = {label: i for i, label in enumerate(CATEGORY_PRIORITY)}
-    category_labels = [m.LABEL for m in ENABLED_SCORERS]
-
     labeled = []
+
     for row in scores:
+        category_labels = [m.LABEL for m in ENABLED_SCORERS]
+
         # Build (label, score) pairs and sort by score desc, then priority.
-        pairs = [(label, row.get(label, 0.0)) for label in category_labels]
-        pairs.sort(key=lambda p: (-p[1], priority_index.get(p[0], 999)))
+        pairs = [(l, row.get(l, 0.0)) for l in category_labels]
+        pairs.sort(key=lambda x: -x[1])
 
         if pairs and pairs[0][1] >= MIN_LABEL_SCORE:
-            winning_label, winning_score = pairs[0]
+            label, score = pairs[0]
         else:
-            winning_label, winning_score = "video_content", 0.0
+            label, score = "video_content", 0.0
 
         labeled.append({
             **row,
-            "label":     winning_label,
-            "max_score": round(winning_score, 2),
+            "label":     label,
+            "max_score": round(score, 2),
+            "debug":     window_debug.get(row["window_index"]) if window_debug else None,
         })
 
     return labeled
@@ -237,11 +255,20 @@ def _smooth_labels(labeled_windows, max_gap_windows):
     return out
 
 
-def _drop_short_non_content(segments, min_duration_sec):
-    """Flip non-content segments below min_duration back to content."""
+def _drop_short_non_content(segments, default_min_duration_sec):
     cleaned = []
+
     for seg in segments:
-        if seg["type"] != "video_content" and seg["duration_seconds"] < min_duration_sec:
+        if seg["type"] == "video_content":
+            cleaned.append(seg)
+            continue
+
+        min_required = MIN_DURATION_BY_LABEL.get(
+            seg["type"],
+            default_min_duration_sec
+        )
+
+        if seg["duration_seconds"] < min_required:
             new_seg = dict(seg)
             new_seg["type"] = "video_content"
             new_seg["max_score"] = 0.0
@@ -249,25 +276,55 @@ def _drop_short_non_content(segments, min_duration_sec):
         else:
             cleaned.append(seg)
 
-    # Re-merge any newly-adjacent content segments
-    if not cleaned:
-        return cleaned
-    merged = [dict(cleaned[0])]
-    for seg in cleaned[1:]:
+    return _remerge_content(cleaned)
+
+
+# ==== Position constraints ==============================================
+
+def _enforce_position_constraints(segments) -> list[dict]:
+    if not segments:
+        return segments
+
+    out = [dict(s) for s in segments]
+    last_idx = len(out) - 1
+
+    for i, seg in enumerate(out):
+        label = seg["type"]
+        rule = POSITION_CONSTRAINTS.get(label)
+
+        if not rule:
+            continue
+
+        if rule == "start_only" and i != 0:
+            seg["type"] = "video_content"
+            seg["max_score"] = 0.0
+
+        elif rule == "end_only" and i != last_idx:
+            seg["type"] = "video_content"
+            seg["max_score"] = 0.0
+
+    return _remerge_content(out)
+
+
+def _remerge_content(segments) -> list[dict]:
+    if not segments:
+        return segments
+
+    merged = [dict(segments[0])]
+    for seg in segments[1:]:
         last = merged[-1]
-        if seg["type"] == last["type"]:
-            last["end_seconds"] = seg["end_seconds"]
+        if seg["type"] == last["type"] == "video_content":
+            last["end_seconds"]      = seg["end_seconds"]
             last["duration_seconds"] = round(last["end_seconds"] - last["start_seconds"], 3)
-            last["max_score"] = max(last.get("max_score", 0), seg.get("max_score", 0))
         else:
             merged.append(dict(seg))
+
     return merged
 
 
 # ==== Segment merging ===================================================
 
 def _merge_to_segments(labeled_windows) -> list[dict]:
-    """Collapse adjacent same-label windows into one segment each."""
     if not labeled_windows:
         return []
 

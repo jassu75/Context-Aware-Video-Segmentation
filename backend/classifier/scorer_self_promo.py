@@ -78,7 +78,7 @@ SUSTAINED_SHOT_MIN_SEC = 10.0
 
 # ==== Scoring ===========================================================
 
-def score(audio_data, text_data, scene_data, video_data, scores):
+def score(audio_data, text_data, scene_data, video_data, scores, debug=False):
     text_windows  = windows_from(text_data)
     audio_windows = windows_from(audio_data)
 
