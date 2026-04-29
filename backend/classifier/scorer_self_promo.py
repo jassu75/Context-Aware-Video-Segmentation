@@ -26,6 +26,7 @@ from backend.classifier._shared import (
 
 
 LABEL = "self_promo"
+MAX_POINTS = 10.0
 
 
 # ==== Phrase patterns ====================================================

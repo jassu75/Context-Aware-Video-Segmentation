@@ -17,6 +17,7 @@ from backend.classifier._shared import (
 
 
 LABEL = "recap"
+MAX_POINTS = 10.0
 
 
 # ==== Phrase patterns ====================================================

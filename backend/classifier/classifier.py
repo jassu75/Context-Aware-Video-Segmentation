@@ -7,7 +7,8 @@ together: it builds a shared per-window score array, hands it to every
 registered scorer, then picks a winning label per window and merges
 adjacent same-label windows into segments.
 
-Score scale per category: 0 (no rules satisfied) to 10 (all rules fired).
+Score scale per category: scorers may emit raw rule points; the classifier
+normalizes each category onto a shared 0-10 scale before comparing labels.
 A window stays "video_content" unless some category's score >= MIN_LABEL_SCORE.
 
 Categories and ownership (one scorer module per bullet):
@@ -42,6 +43,10 @@ from pathlib import Path
 
 # A window is labeled non-content only if some category clears this bar.
 MIN_LABEL_SCORE = 4.0
+
+# Fallback denominator for scorer normalization. Scorers can override this by
+# exporting MAX_POINTS = their total possible raw rule points.
+DEFAULT_MAX_POINTS = 10.0
 
 # After labeling, fill short content gaps surrounded by the same non-content
 # label. Per-window scoring tends to fragment a real ad block into many
@@ -115,6 +120,7 @@ def classify(audio_data, text_data, scene_data, video_data=None) -> dict:
             audio_data, text_data, scene_data, video_data, scores
         )
 
+    scores = _normalize_scores(scores)
     labeled_windows = _label_windows(scores)
     labeled_windows = _smooth_labels(labeled_windows, SMOOTHING_MAX_GAP_WINDOWS)
     segments        = _merge_to_segments(labeled_windows)
@@ -165,13 +171,43 @@ def _init_scores(audio_data, text_data, video_data) -> list[dict]:
     return scores
 
 
+def _normalization_scales() -> dict[str, float]:
+    scales = {}
+    for mod in ENABLED_SCORERS:
+        max_points = float(getattr(mod, "MAX_POINTS", DEFAULT_MAX_POINTS) or DEFAULT_MAX_POINTS)
+        scales[mod.LABEL] = max_points
+    return scales
+
+
+def _normalize_scores(scores) -> list[dict]:
+    """
+    Convert each scorer's raw rule points to the common 0-10 comparison scale.
+
+    This lets scorer owners choose natural rule weights internally while the
+    classifier compares labels consistently. We intentionally do not cap here:
+    scorer MAX_POINTS should equal the total points available if all rules pass.
+    """
+    scales = _normalization_scales()
+    normalized = []
+    for row in scores:
+        out = dict(row)
+        raw_scores = {}
+        for label, max_points in scales.items():
+            raw = float(row.get(label, 0.0) or 0.0)
+            raw_scores[label] = raw
+            out[label] = (raw / max_points) * 10.0 if max_points > 0 else raw
+        out["raw_scores"] = raw_scores
+        normalized.append(out)
+    return normalized
+
+
 # ==== Labeling ==========================================================
 
 def _label_windows(scores) -> list[dict]:
     """
-    Pick the winning category per window. Highest score wins; ties go
-    to whichever category is earlier in CATEGORY_PRIORITY. If the
-    winner doesn't clear MIN_LABEL_SCORE, the window is content.
+    Pick the winning category per window using normalized scores. Highest
+    score wins; ties go to whichever category is earlier in CATEGORY_PRIORITY.
+    If the winner doesn't clear MIN_LABEL_SCORE, the window is content.
     """
     priority_index = {label: i for i, label in enumerate(CATEGORY_PRIORITY)}
     category_labels = [m.LABEL for m in ENABLED_SCORERS]

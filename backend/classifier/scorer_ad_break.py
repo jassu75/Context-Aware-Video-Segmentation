@@ -15,6 +15,7 @@ from backend.classifier._shared import at, scenes_from, windows_from
 
 
 LABEL = "ad_break"
+MAX_POINTS = 10.0
 
 
 # Ground-truth ads in the supplied set are about 28s-118s. Keep the range a
