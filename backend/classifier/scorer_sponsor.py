@@ -15,7 +15,7 @@ from backend.classifier._shared import at, windows_from
 
 
 LABEL = "sponsor"
-MAX_POINTS = 10.0
+MAX_SCORE = 10.0
 
 
 # ==== Per-rule point allocations ========================================

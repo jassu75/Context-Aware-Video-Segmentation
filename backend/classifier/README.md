@@ -35,12 +35,13 @@ The classifier passes every scorer the same modality JSON data:
 - `video_data` from `video_processor.py`
 
 Each scorer assigns raw rule points for every analysis window. The scorer
-should also export `MAX_POINTS`, which is the number of points possible if all
+should also export `MAX_SCORE`, which is the number of points possible if all
 rules pass. The classifier normalizes each scorer's raw points onto a shared
-0-10 scale, then compares labels. A normalized score greater than or equal to
-4 means the window is likely that non-content type. The classifier then picks
-the highest scoring label per window and merges adjacent windows into final
-timeline segments.
+0-10 scale, then compares labels. For compatibility with earlier scorer files,
+the classifier also accepts `MAX_POINTS`. A normalized score greater than or
+equal to 4 means the window is likely that non-content type. The classifier
+then picks the highest scoring label per window and merges adjacent windows
+into final timeline segments.
 
 Important: scorer files should not directly output final segments. They should
 score windows. The classifier handles combining, tie-breaking, smoothing, and
@@ -50,7 +51,7 @@ writing the final timeline JSON.
 
 ```python
 LABEL = "self_promo"
-MAX_POINTS = 10.0
+MAX_SCORE = 10.0
 
 
 def score(audio_data, text_data, scene_data, video_data, scores, debug=False):
@@ -61,7 +62,7 @@ def score(audio_data, text_data, scene_data, video_data, scores, debug=False):
 
         # Inspect audio/text/scene/video features here.
         # Add points based on your definition/rules.
-        # Add raw rule points. MAX_POINTS should equal all possible points.
+        # Add raw rule points. MAX_SCORE should equal all possible points.
 
         row[LABEL] = round(s, 2)
 
@@ -81,7 +82,7 @@ When adding a new scorer, make sure:
 
 1. The file is named `backend/classifier/scorer_<label>.py`.
 2. `LABEL` matches the segment type string.
-3. `MAX_POINTS` equals the total raw points available if all rules pass.
+3. `MAX_SCORE` equals the total raw points available if all rules pass.
 4. The scorer is listed in `classifier.py` under `_EXPECTED_SCORERS`.
 5. The label is added to `CATEGORY_PRIORITY` if tie-breaking matters.
 6. If evaluating it, add it to the evaluation script or use
@@ -152,7 +153,7 @@ Should not count:
 
 Build each scorer as a window scorer, not as a separate segment generator.
 Scorers can use natural raw point totals internally, but they must declare
-`MAX_POINTS` so the classifier can normalize scores before comparing labels.
+`MAX_SCORE` so the classifier can normalize scores before comparing labels.
 The classifier still uses `CATEGORY_PRIORITY` to break ties if normalized
 scores are equal. This keeps every team's work compatible with the shared
 classifier and lets the classifier piece all scorer outputs together into one
