@@ -24,7 +24,7 @@ MIN_AD_DURATION_SEC = 20.0
 MAX_AD_DURATION_SEC = 130.0
 
 
-def score(audio_data, text_data, scene_data, video_data, scores):
+def score(audio_data, text_data, scene_data, video_data, scores, debug=False):
     audio_windows = windows_from(audio_data)
     text_windows = windows_from(text_data)
     video_windows = windows_from(video_data)

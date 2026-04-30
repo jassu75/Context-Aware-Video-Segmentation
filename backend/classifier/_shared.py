@@ -74,3 +74,35 @@ def shot_density_near(window, scene_data, radius_sec: float = 10.0) -> float:
     hi = win_mid + radius_sec
     count = sum(1 for s in scenes if lo <= s.get("start_s", 0.0) <= hi)
     return count / (2 * radius_sec)
+
+class DebugAccumulator:
+    def __init__(self, debug: bool = False):
+        self.debug = debug
+        self.events = []
+
+    def add(self, score: float, value: float, reason: str, meta=None) -> float:
+        if self.debug and value != 0:
+            if meta:
+                self.events.append({
+                    "reason": reason,
+                    "value": value,
+                    "meta": meta
+                })
+            else:
+                self.events.append(f"{reason} (+{value})")
+        return score + value
+
+    def set(self, score: float, value: float, reason: str, meta=None) -> float:
+        if self.debug:
+            if meta:
+                self.events.append({
+                    "reason": reason,
+                    "value": value,
+                    "meta": meta
+                })
+            else:
+                self.events.append(f"{reason} (= {value})")
+        return value
+
+    def get(self):
+        return self.events if self.debug else None
