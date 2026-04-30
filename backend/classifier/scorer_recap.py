@@ -33,6 +33,11 @@ RECAP_PATTERNS = [
     r"\bin\s+summary\b",
     r"\bas\s+(?:i|we)\s+(?:said|mentioned|covered|discussed)\s+(?:earlier|before|last\s+time)?\b",
     r"\b(?:earlier|before)\s+(?:we|i)\s+(?:said|covered|discussed|looked\s+at)\b",
+    r"\bwhat\s+did\s+we\s+do\b",
+    r"\bon\s+[a-z]+\s+\d{1,2}(?:st|nd|rd|th)?,?\s+\d{4}\b",
+    r"\b\d{1,2}(?:st|nd|rd|th)?,?\s+\d{4}\s+during\s+the\b",
+    r"\bat\s+that\s+time\b",
+    r"\b\d+\s+years\s+ago\b",
 ]
 
 
@@ -67,7 +72,7 @@ def score(audio_data, text_data, scene_data, video_data, scores, debug=False):
     for i, row in enumerate(scores):
         s = 0.0
         text_w = at(text_windows, i)
-        context_text = _context_text(text_windows, i)
+        context_text = _context_text(text_windows, i, radius_windows=14)
         has_recap_keyword = _has_recap_phrase(context_text)
         win_start = row.get("start_s", 0.0) or 0.0
         is_intro_or_outro = (

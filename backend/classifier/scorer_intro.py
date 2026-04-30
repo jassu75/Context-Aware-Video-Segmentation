@@ -10,7 +10,8 @@ from backend.classifier._shared import (
 )
 
 LABEL = "intro"
-MAX_SCORE = 10.0
+MAX_POINTS = 10.0
+MAX_SCORE = MAX_POINTS
 
 # ---- INTRO -----------------------------------------------
 

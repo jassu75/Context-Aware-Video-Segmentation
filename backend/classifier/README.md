@@ -23,7 +23,7 @@ LABEL = "category_name"
 and a score function:
 
 ```python
-def score(audio_data, text_data, scene_data, video_data, scores):
+def score(audio_data, text_data, scene_data, video_data, scores, debug=False):
     ...
 ```
 
@@ -53,7 +53,7 @@ LABEL = "self_promo"
 MAX_POINTS = 10.0
 
 
-def score(audio_data, text_data, scene_data, video_data, scores):
+def score(audio_data, text_data, scene_data, video_data, scores, debug=False):
     results = []
 
     for i, row in enumerate(scores):
@@ -69,6 +69,7 @@ def score(audio_data, text_data, scene_data, video_data, scores):
             "window_index": row["window_index"],
             "label": LABEL,
             "score": round(s, 2),
+            "debug": None,
         })
 
     return results
@@ -85,6 +86,10 @@ When adding a new scorer, make sure:
 5. The label is added to `CATEGORY_PRIORITY` if tie-breaking matters.
 6. If evaluating it, add it to the evaluation script or use
    `eval_category.py` with that label.
+
+If a scorer supports debug details, return them under the optional `debug`
+field for each window when `debug=True`. If not, accepting the parameter and
+returning `None` is fine.
 
 ## Definition Guidance
 

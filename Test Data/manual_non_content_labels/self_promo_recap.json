@@ -1,0 +1,328 @@
+{
+  "schema_version": "1.0",
+  "source": "manual review spreadsheet",
+  "annotator": "Jesus",
+  "label_normalization": {
+    "Selfpromotion": "self_promo",
+    "Repeated Recaps": "recap"
+  },
+  "notes": "Manual ground truth for self_promo and recap/repeated boilerplate only. Ad/sponsorship intervals are intentionally excluded because they already exist in Test Data/video_info.",
+  "videos": {
+    "test_001": {
+      "video_file": "test_001.mp4",
+      "video_duration_min": "21:20",
+      "resolution": "640x360",
+      "segments": [
+        {
+          "segment_id": 1,
+          "type": "self_promo",
+          "start_time": "00:00:06",
+          "end_time": "00:00:09",
+          "start_seconds": 6.0,
+          "end_seconds": 9.0,
+          "duration_seconds": 3.0,
+          "notes": "TED Ideas worth spreading"
+        },
+        {
+          "segment_id": 2,
+          "type": "self_promo",
+          "start_time": "00:00:10",
+          "end_time": "00:00:15",
+          "start_seconds": 10.0,
+          "end_seconds": 15.0,
+          "duration_seconds": 5.0,
+          "notes": "One of 1000+ TED Talks, new ideas every weekday, TED.com"
+        },
+        {
+          "segment_id": 6,
+          "type": "self_promo",
+          "start_time": "00:24:13",
+          "end_time": "00:24:18",
+          "start_seconds": 1453.0,
+          "end_seconds": 1458.0,
+          "duration_seconds": 5.0,
+          "notes": "TED New TED Talks every day at www.TED.com"
+        }
+      ]
+    },
+    "test_002": {
+      "video_file": "test_002.mp4",
+      "video_duration_min": "20:00",
+      "resolution": "640x360",
+      "segments": [
+        {
+          "segment_id": 1,
+          "type": "self_promo",
+          "start_time": "00:00:00",
+          "end_time": "00:00:19",
+          "start_seconds": 0.0,
+          "end_seconds": 19.0,
+          "duration_seconds": 19.0,
+          "notes": "NASA logo in top right corner of video"
+        },
+        {
+          "segment_id": 2,
+          "type": "self_promo",
+          "start_time": "00:03:04",
+          "end_time": "00:04:30",
+          "start_seconds": 184.0,
+          "end_seconds": 270.0,
+          "duration_seconds": 86.0,
+          "notes": "NASA logo in top right corner of video"
+        },
+        {
+          "segment_id": 4,
+          "type": "self_promo",
+          "start_time": "00:05:32",
+          "end_time": "00:08:19",
+          "start_seconds": 332.0,
+          "end_seconds": 499.0,
+          "duration_seconds": 167.0,
+          "notes": "NASA logo in top right corner of video"
+        },
+        {
+          "segment_id": 5,
+          "type": "self_promo",
+          "start_time": "00:08:36",
+          "end_time": "00:11:18",
+          "start_seconds": 516.0,
+          "end_seconds": 678.0,
+          "duration_seconds": 162.0,
+          "notes": "NASA logo in top right corner of video"
+        },
+        {
+          "segment_id": 6,
+          "type": "recap",
+          "start_time": "00:08:37",
+          "end_time": "00:09:08",
+          "start_seconds": 517.0,
+          "end_seconds": 548.0,
+          "duration_seconds": 31.0,
+          "notes": "On April 15th 1970 during Apollo 13 mission, 3 explorers set the..."
+        },
+        {
+          "segment_id": 8,
+          "type": "self_promo",
+          "start_time": "00:11:50",
+          "end_time": "00:13:26",
+          "start_seconds": 710.0,
+          "end_seconds": 806.0,
+          "duration_seconds": 96.0,
+          "notes": "NASA logo in top right corner of video"
+        },
+        {
+          "segment_id": 9,
+          "type": "self_promo",
+          "start_time": "00:13:47",
+          "end_time": "00:18:03",
+          "start_seconds": 827.0,
+          "end_seconds": 1083.0,
+          "duration_seconds": 256.0,
+          "notes": "NASA logo in top right corner of video"
+        },
+        {
+          "segment_id": 10,
+          "type": "self_promo",
+          "start_time": "00:18:26",
+          "end_time": "00:18:34",
+          "start_seconds": 1106.0,
+          "end_seconds": 1114.0,
+          "duration_seconds": 8.0,
+          "notes": "NASA logo in top right corner of video"
+        },
+        {
+          "segment_id": 12,
+          "type": "self_promo",
+          "start_time": "00:19:36",
+          "end_time": "00:22:31",
+          "start_seconds": 1176.0,
+          "end_seconds": 1351.0,
+          "duration_seconds": 175.0,
+          "notes": "NASA logo in top right corner of video"
+        }
+      ]
+    },
+    "test_003": {
+      "video_file": "test_003.mp4",
+      "video_duration_min": "27:21",
+      "resolution": "640x360",
+      "segments": [
+        {
+          "segment_id": 1,
+          "type": "recap",
+          "start_time": "00:00:36",
+          "end_time": "00:01:09",
+          "start_seconds": 36.0,
+          "end_seconds": 69.0,
+          "duration_seconds": 33.0,
+          "notes": "What did we do? We stole the Times Square Jumbotron..."
+        }
+      ]
+    },
+    "test_004": {
+      "video_file": "test_004.mp4",
+      "video_duration_min": "30:00",
+      "resolution": "640x360",
+      "segments": [
+        {
+          "segment_id": 1,
+          "type": "self_promo",
+          "start_time": "00:00:00",
+          "end_time": "00:00:04",
+          "start_seconds": 0.0,
+          "end_seconds": 4.0,
+          "duration_seconds": 4.0,
+          "notes": "Stanford Engineering"
+        },
+        {
+          "segment_id": 2,
+          "type": "self_promo",
+          "start_time": "00:00:05",
+          "end_time": "00:03:38",
+          "start_seconds": 5.0,
+          "end_seconds": 218.0,
+          "duration_seconds": 213.0,
+          "notes": "Stanford logo bottom right"
+        },
+        {
+          "segment_id": 3,
+          "type": "self_promo",
+          "start_time": "00:03:39",
+          "end_time": "00:03:48",
+          "start_seconds": 219.0,
+          "end_seconds": 228.0,
+          "duration_seconds": 9.0,
+          "notes": "Kian Katanforoosh bottom right"
+        },
+        {
+          "segment_id": 4,
+          "type": "self_promo",
+          "start_time": "00:03:49",
+          "end_time": "00:04:19",
+          "start_seconds": 229.0,
+          "end_seconds": 259.0,
+          "duration_seconds": 30.0,
+          "notes": "Stanford logo bottom right"
+        },
+        {
+          "segment_id": 6,
+          "type": "self_promo",
+          "start_time": "00:04:51",
+          "end_time": "00:08:22",
+          "start_seconds": 291.0,
+          "end_seconds": 502.0,
+          "duration_seconds": 211.0,
+          "notes": "Stanford logo bottom right"
+        }
+      ]
+    },
+    "test_005": {
+      "video_file": "test_005.mp4",
+      "video_duration_min": "21:55",
+      "resolution": "640x360",
+      "segments": [
+        {
+          "segment_id": 1,
+          "type": "self_promo",
+          "start_time": "00:00:01",
+          "end_time": "00:00:06",
+          "start_seconds": 1.0,
+          "end_seconds": 6.0,
+          "duration_seconds": 5.0,
+          "notes": "National Geographic Documentary Films"
+        },
+        {
+          "segment_id": 2,
+          "type": "self_promo",
+          "start_time": "00:00:08",
+          "end_time": "00:00:12",
+          "start_seconds": 8.0,
+          "end_seconds": 12.0,
+          "duration_seconds": 4.0,
+          "notes": "The Nobel Prize"
+        },
+        {
+          "segment_id": 3,
+          "type": "self_promo",
+          "start_time": "00:00:14",
+          "end_time": "00:00:18",
+          "start_seconds": 14.0,
+          "end_seconds": 18.0,
+          "duration_seconds": 4.0,
+          "notes": "National Geographic Documentary Films presents"
+        },
+        {
+          "segment_id": 4,
+          "type": "self_promo",
+          "start_time": "00:00:19",
+          "end_time": "00:00:22",
+          "start_seconds": 19.0,
+          "end_seconds": 22.0,
+          "duration_seconds": 3.0,
+          "notes": "In association with the Nobel Prize"
+        },
+        {
+          "segment_id": 5,
+          "type": "self_promo",
+          "start_time": "00:00:23",
+          "end_time": "00:00:26",
+          "start_seconds": 23.0,
+          "end_seconds": 26.0,
+          "duration_seconds": 3.0,
+          "notes": "A Rideback and Grain Media production"
+        },
+        {
+          "segment_id": 6,
+          "type": "self_promo",
+          "start_time": "00:01:04",
+          "end_time": "00:01:13",
+          "start_seconds": 64.0,
+          "end_seconds": 73.0,
+          "duration_seconds": 9.0,
+          "notes": "The Lost Forest"
+        },
+        {
+          "segment_id": 10,
+          "type": "self_promo",
+          "start_time": "00:22:35",
+          "end_time": "00:23:29",
+          "start_seconds": 1355.0,
+          "end_seconds": 1409.0,
+          "duration_seconds": 54.0,
+          "notes": "Credits"
+        },
+        {
+          "segment_id": 11,
+          "type": "self_promo",
+          "start_time": "00:23:30",
+          "end_time": "00:23:32",
+          "start_seconds": 1410.0,
+          "end_seconds": 1412.0,
+          "duration_seconds": 2.0,
+          "notes": "Production logos"
+        },
+        {
+          "segment_id": 12,
+          "type": "self_promo",
+          "start_time": "00:23:33",
+          "end_time": "00:23:34",
+          "start_seconds": 1413.0,
+          "end_seconds": 1414.0,
+          "duration_seconds": 1.0,
+          "notes": "The Nobel Prize"
+        },
+        {
+          "segment_id": 13,
+          "type": "self_promo",
+          "start_time": "00:23:36",
+          "end_time": "00:23:38",
+          "start_seconds": 1416.0,
+          "end_seconds": 1418.0,
+          "duration_seconds": 2.0,
+          "notes": "National Geographic Documentary Films"
+        }
+      ]
+    }
+  },
+  "review_needed": []
+}

@@ -1,11 +1,11 @@
+import argparse
+import json
+from dataclasses import asdict, dataclass
+from pathlib import Path
+from typing import Dict, List, Tuple
+
 import cv2
 import numpy as np
-from dataclasses import dataclass, asdict
-from typing import List, Tuple
-import json
-from pathlib import Path
-import argparse
-
 
 
 @dataclass
@@ -16,6 +16,8 @@ class PerFrameFeatures:
     mean_hsv_v: float
     color_hist: np.ndarray
     edge_density: float
+    corner_edge_density: Dict[str, float]
+    corner_gray_std: Dict[str, float]
     is_black: bool
 
 
@@ -37,6 +39,21 @@ class WindowVideoFeatures:
 
     edge_density_mean: float
     edge_density_std: float
+
+    top_left_edge_density_mean: float
+    top_right_edge_density_mean: float
+    bottom_left_edge_density_mean: float
+    bottom_right_edge_density_mean: float
+
+    top_left_gray_std_mean: float
+    top_right_gray_std_mean: float
+    bottom_left_gray_std_mean: float
+    bottom_right_gray_std_mean: float
+
+    top_left_frame_diff_mean: float
+    top_right_frame_diff_mean: float
+    bottom_left_frame_diff_mean: float
+    bottom_right_frame_diff_mean: float
 
     black_frame_ratio: float
     static_frame_ratio: float
@@ -81,7 +98,7 @@ class VideoProcessor:
             "duration_s": round(duration, 3),
             "window_sec": self.window_sec,
             "hop_sec": self.hop_sec,
-            "frame_count": self.frame_count
+            "frame_count": self.frame_count,
         }
 
         windows: List[WindowVideoFeatures] = []
@@ -124,11 +141,7 @@ class VideoProcessor:
         if self.frame_count < 1:
             raise ValueError("frame_count must be >= 1")
 
-        fractions = np.linspace(
-            0.0,
-            1.0,
-            self.frame_count + 2
-        )[1:-1]
+        fractions = np.linspace(0.0, 1.0, self.frame_count + 2)[1:-1]
 
         return [round(start_s + f * duration, 6) for f in fractions]
 
@@ -162,6 +175,7 @@ class VideoProcessor:
 
         edges = cv2.Canny(gray, 50, 150)
         edge_density = float(np.count_nonzero(edges)) / edges.size
+        corner_edge_density, corner_gray_std = self._extract_corner_features(gray)
 
         is_black = mean_hsv_v < 12.0
         color_hist = self._compute_color_histogram(small)
@@ -174,10 +188,40 @@ class VideoProcessor:
                 mean_hsv_v=mean_hsv_v,
                 color_hist=color_hist,
                 edge_density=edge_density,
+                corner_edge_density=corner_edge_density,
+                corner_gray_std=corner_gray_std,
                 is_black=is_black,
             ),
             gray,
         )
+
+    def _extract_corner_features(self, gray: np.ndarray) -> Tuple[Dict[str, float], Dict[str, float]]:
+        """
+        Measure small corner regions where publisher watermarks/logos often sit.
+
+        This is intentionally generic: it does not know what NASA, Stanford, or
+        TED look like. It only exposes corner detail/contrast so scorers can
+        decide whether a stable visual mark is meaningful.
+        """
+        rois = self._corner_rois(gray)
+        edge_density = {}
+        gray_std = {}
+        for name, roi in rois.items():
+            edges = cv2.Canny(roi, 50, 150)
+            edge_density[name] = float(np.count_nonzero(edges)) / edges.size
+            gray_std[name] = float(np.std(roi))
+        return edge_density, gray_std
+
+    def _corner_rois(self, gray: np.ndarray) -> Dict[str, np.ndarray]:
+        h, w = gray.shape[:2]
+        roi_w = max(int(w * 0.28), 1)
+        roi_h = max(int(h * 0.22), 1)
+        return {
+            "top_left": gray[:roi_h, :roi_w],
+            "top_right": gray[:roi_h, w - roi_w:],
+            "bottom_left": gray[h - roi_h:, :roi_w],
+            "bottom_right": gray[h - roi_h:, w - roi_w:],
+        }
 
     def _compute_color_histogram(self, frame: np.ndarray) -> np.ndarray:
         hist = []
@@ -200,15 +244,40 @@ class VideoProcessor:
         hsv_s_vals = np.array([f.mean_hsv_s for f in per_frame_features], dtype=np.float32)
         hsv_v_vals = np.array([f.mean_hsv_v for f in per_frame_features], dtype=np.float32)
         edge_vals = np.array([f.edge_density for f in per_frame_features], dtype=np.float32)
+        corner_names = ("top_left", "top_right", "bottom_left", "bottom_right")
+        corner_edge_vals = {
+            name: np.array([f.corner_edge_density[name] for f in per_frame_features], dtype=np.float32)
+            for name in corner_names
+        }
+        corner_std_vals = {
+            name: np.array([f.corner_gray_std[name] for f in per_frame_features], dtype=np.float32)
+            for name in corner_names
+        }
         black_vals = np.array([1.0 if f.is_black else 0.0 for f in per_frame_features], dtype=np.float32)
         hist_vals = np.stack([f.color_hist for f in per_frame_features], axis=0)
 
         frame_diffs = []
+        corner_frame_diffs = {name: [] for name in corner_names}
         for i in range(1, len(gray_frames)):
             diff = cv2.absdiff(gray_frames[i], gray_frames[i - 1])
             frame_diffs.append(float(np.mean(diff)))
+            current_rois = self._corner_rois(gray_frames[i])
+            previous_rois = self._corner_rois(gray_frames[i - 1])
+            for name in corner_names:
+                roi_diff = cv2.absdiff(current_rois[name], previous_rois[name])
+                corner_frame_diffs[name].append(float(np.mean(roi_diff)))
 
-        frame_diffs_arr = np.array(frame_diffs, dtype=np.float32) if frame_diffs else np.array([0.0], dtype=np.float32)
+        if frame_diffs:
+            frame_diffs_arr = np.array(frame_diffs, dtype=np.float32)
+        else:
+            frame_diffs_arr = np.array([0.0], dtype=np.float32)
+        corner_diff_vals = {
+            name: (
+                np.array(values, dtype=np.float32)
+                if values else np.array([0.0], dtype=np.float32)
+            )
+            for name, values in corner_frame_diffs.items()
+        }
 
         static_flags = (frame_diffs_arr < 2.5).astype(np.float32)
 
@@ -217,25 +286,30 @@ class VideoProcessor:
             start_s=round(start_s, 3),
             end_s=round(end_s, 3),
             sampled_frame_times=[round(t, 3) for t in frame_times],
-
             mean_brightness_mean=round(float(np.mean(brightness_vals)), 6),
             mean_brightness_std=round(float(np.std(brightness_vals)), 6),
-
             mean_hsv_s_mean=round(float(np.mean(hsv_s_vals)), 6),
             mean_hsv_s_std=round(float(np.std(hsv_s_vals)), 6),
-
             mean_hsv_v_mean=round(float(np.mean(hsv_v_vals)), 6),
             mean_hsv_v_std=round(float(np.std(hsv_v_vals)), 6),
-
             edge_density_mean=round(float(np.mean(edge_vals)), 6),
             edge_density_std=round(float(np.std(edge_vals)), 6),
-
+            top_left_edge_density_mean=round(float(np.mean(corner_edge_vals["top_left"])), 6),
+            top_right_edge_density_mean=round(float(np.mean(corner_edge_vals["top_right"])), 6),
+            bottom_left_edge_density_mean=round(float(np.mean(corner_edge_vals["bottom_left"])), 6),
+            bottom_right_edge_density_mean=round(float(np.mean(corner_edge_vals["bottom_right"])), 6),
+            top_left_gray_std_mean=round(float(np.mean(corner_std_vals["top_left"])), 6),
+            top_right_gray_std_mean=round(float(np.mean(corner_std_vals["top_right"])), 6),
+            bottom_left_gray_std_mean=round(float(np.mean(corner_std_vals["bottom_left"])), 6),
+            bottom_right_gray_std_mean=round(float(np.mean(corner_std_vals["bottom_right"])), 6),
+            top_left_frame_diff_mean=round(float(np.mean(corner_diff_vals["top_left"])), 6),
+            top_right_frame_diff_mean=round(float(np.mean(corner_diff_vals["top_right"])), 6),
+            bottom_left_frame_diff_mean=round(float(np.mean(corner_diff_vals["bottom_left"])), 6),
+            bottom_right_frame_diff_mean=round(float(np.mean(corner_diff_vals["bottom_right"])), 6),
             black_frame_ratio=round(float(np.mean(black_vals)), 6),
             static_frame_ratio=round(float(np.mean(static_flags)), 6),
-
             frame_diff_mean=round(float(np.mean(frame_diffs_arr)), 6),
             frame_diff_max=round(float(np.max(frame_diffs_arr)), 6),
-
             color_hist_mean=[round(float(v), 6) for v in np.mean(hist_vals, axis=0)],
         )
 
@@ -248,7 +322,6 @@ class VideoProcessor:
 
 
 if __name__ == "__main__":
-
     parser = argparse.ArgumentParser(description="Extract video features")
     parser.add_argument(
         "--video_path",
@@ -262,11 +335,10 @@ if __name__ == "__main__":
         default="output/video_processor_output.json",
         help="output JSON path",
     )
-
     parser.add_argument(
-    "--frame_count",
-    type=int,
-    default=4,
+        "--frame_count",
+        type=int,
+        default=4,
     )
 
     args = parser.parse_args()
@@ -282,7 +354,8 @@ if __name__ == "__main__":
     output = processor.to_json_dict(windows, video_info)
 
     out_path = Path(args.output_path)
-    with open(out_path, "w") as f:
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(out_path, "w", encoding="utf-8") as f:
         json.dump(output, f, indent=2)
 
     print(f"Saved video features to {out_path}")
