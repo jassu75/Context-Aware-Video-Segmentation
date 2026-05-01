@@ -45,7 +45,7 @@ from pathlib import Path
 MIN_LABEL_SCORE = 4.0
 
 # Fallback denominator for scorer normalization. Scorers can override this by
-# exporting MAX_SCORE or MAX_POINTS as their total possible raw rule points.
+# exporting MAX_SCORE as their total possible raw rule points.
 DEFAULT_MAX_SCORE = 10.0
 
 # After labeling, fill short content gaps surrounded by the same non-content
@@ -193,9 +193,7 @@ def _init_scores(audio_data, text_data, video_data) -> list[dict]:
 def _normalization_scales() -> dict[str, float]:
     scales = {}
     for mod in ENABLED_SCORERS:
-        max_score = getattr(mod, "MAX_SCORE", None)
-        if max_score is None:
-            max_score = getattr(mod, "MAX_POINTS", DEFAULT_MAX_SCORE)
+        max_score = getattr(mod, "MAX_SCORE", DEFAULT_MAX_SCORE)
         scales[mod.LABEL] = float(max_score or DEFAULT_MAX_SCORE)
     return scales
 
@@ -206,8 +204,7 @@ def _normalize_scores(scores) -> list[dict]:
 
     This lets scorer owners choose natural rule weights internally while the
     classifier compares labels consistently. We intentionally do not cap here:
-    scorer MAX_SCORE/MAX_POINTS should equal the total points available if all
-    rules pass.
+    scorer MAX_SCORE should equal the total points available if all rules pass.
     """
     scales = _normalization_scales()
     normalized = []

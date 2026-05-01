@@ -37,11 +37,10 @@ The classifier passes every scorer the same modality JSON data:
 Each scorer assigns raw rule points for every analysis window. The scorer
 should also export `MAX_SCORE`, which is the number of points possible if all
 rules pass. The classifier normalizes each scorer's raw points onto a shared
-0-10 scale, then compares labels. For compatibility with earlier scorer files,
-the classifier also accepts `MAX_POINTS`. A normalized score greater than or
-equal to 4 means the window is likely that non-content type. The classifier
-then picks the highest scoring label per window and merges adjacent windows
-into final timeline segments.
+0-10 scale, then compares labels. A normalized score greater than or equal to
+4 means the window is likely that non-content type. The classifier then picks
+the highest scoring label per window and merges adjacent windows into final
+timeline segments.
 
 Important: scorer files should not directly output final segments. They should
 score windows. The classifier handles combining, tie-breaking, smoothing, and
