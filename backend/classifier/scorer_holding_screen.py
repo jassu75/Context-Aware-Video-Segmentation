@@ -1,6 +1,7 @@
 from __future__ import annotations
 from statistics import median
 from backend.classifier._shared import at, scenes_from, windows_from
+import re
 
 LABEL = "holding_screen"
 MAX_SCORE = 10.0
@@ -11,9 +12,11 @@ PTS_DEAD_SPACE_FLAG = 2.5
 PTS_STILL_FRAMES = 2.5
 PTS_SILENCE_DUR = 5.0
 PTS_NO_TEXT = 1.5
+PTS_HAS_COUNTDOWN = 3.5
 
 # ==== Thresholds ========================================
 MIN_SILENCE_DURATION = 5
+FRAME_DIFF_THRESHOLD = 1.0
 
 # ==== Scoring ===========================================================
 
@@ -28,17 +31,18 @@ def score(audio_data, text_data, scene_data, video_data, scores, debug=False):
     for i, row in enumerate(scores):
         s = 0.0
 
-        # likely to be dead air/silence/inactivity if 
+        # likely to be holding screen if 
         # 1. the audio output sets dead air flag to True
         # 2. there is little to no change in frame sequence
-        # 3. silence duration lasts longer than 5 seconds
-        # 4. no text is detected for a particular window
+        # 3. silence duration lasts longer than 5 seconds if there is any
+        # 4. if there is a countdown, the countdown only consists of numbers
         audio_win = at(audio_windows, i)
         text_win = at(text_windows, i)
         dead_air_flag_val = _dead_air_flag_state(audio_win)
         win_silence_dur = _silence_duration(audio_win, audio_windows, dead_air_flag_val, i)
         has_words = _words_detected(text_win)
-        still_scene_stat = _still_scenes()
+        still_scene_stat = _still_scenes(video_windows, i)
+        has_countdown = _has_countdown(text_windows, i)
 
         # add points if this window is part of a longer sequence of silent windows
         if win_silence_dur >= MIN_SILENCE_DURATION:
@@ -49,6 +53,8 @@ def score(audio_data, text_data, scene_data, video_data, scores, debug=False):
             s += PTS_NO_TEXT
         if still_scene_stat:
             s += PTS_STILL_FRAMES
+        if has_countdown:
+            s += PTS_HAS_COUNTDOWN
 
         s = min(s, MAX_SCORE)
 
@@ -100,6 +106,19 @@ def _words_detected(text_window) -> bool:
         hasWords = False
     return hasWords
 
-def _still_scenes() -> bool:
-    return False
+def _still_scenes(video_windows, cur_win_idx) -> bool:
+    cur_win = at(video_windows, cur_win_idx)
+    diff = FRAME_DIFF_THRESHOLD + 1.0
 
+    if cur_win and cur_win.get("frame_diff_mean"):
+        diff = cur_win.get("frame_diff_mean")
+    return diff <= FRAME_DIFF_THRESHOLD
+
+def _has_countdown(text_windows, cur_win_idx) -> bool:
+    stat = False
+    text_window = at(text_windows, cur_win_idx)
+    if text_window and text_window.get("transcript"):
+        filtered_transcript = "".join(char for char in text_window.get("transcript") if char.isalnum())
+        if re.fullmatch(r"^\d+$", filtered_transcript):
+            stat = True
+    return stat

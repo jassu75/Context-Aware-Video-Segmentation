@@ -14,6 +14,7 @@ PTS_NO_TEXT = 1.5
 
 # ==== Thresholds ========================================
 MIN_SILENCE_DURATION = 5
+FRAME_DIFF_THRESHOLD = 1.0
 
 # ==== Scoring ===========================================================
 
@@ -38,7 +39,7 @@ def score(audio_data, text_data, scene_data, video_data, scores, debug=False):
         dead_air_flag_val = _dead_air_flag_state(audio_win)
         win_silence_dur = _silence_duration(audio_win, audio_windows, dead_air_flag_val, i)
         has_words = _words_detected(text_win)
-        still_scene_stat = _still_scenes()
+        still_scene_stat = _still_scenes(video_windows, i)
 
         # add points if this window is part of a longer sequence of silent windows
         if win_silence_dur >= MIN_SILENCE_DURATION:
@@ -100,6 +101,11 @@ def _words_detected(text_window) -> bool:
         hasWords = False
     return hasWords
 
-def _still_scenes() -> bool:
-    return False
+def _still_scenes(video_windows, cur_win_idx) -> bool:
+    cur_win = at(video_windows, cur_win_idx)
+    diff = FRAME_DIFF_THRESHOLD + 1.0
+
+    if cur_win and cur_win.get("frame_diff_mean"):
+        diff = cur_win.get("frame_diff_mean")
+    return diff <= FRAME_DIFF_THRESHOLD
 
