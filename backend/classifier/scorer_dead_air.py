@@ -7,8 +7,8 @@ MAX_SCORE = 10.0
 
 # ==== Per-rule point allocations ========================================
 
-PTS_DEAD_SPACE_FLAG = 2.5
-PTS_STILL_FRAMES = 2.5
+PTS_DEAD_SPACE_FLAG = 1.0
+PTS_STILL_FRAMES = 1.0
 PTS_SILENCE_DUR = 5.0
 PTS_NO_TEXT = 1.5
 
