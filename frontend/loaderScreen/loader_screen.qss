@@ -1,0 +1,14 @@
+LoaderScreen {
+    background-color: transparent;
+}
+
+QLabel#loaderLabel {
+    color: #aab0bb;
+    font-size: 15px;
+    font-weight: 500;
+}
+
+QLabel#loaderSub {
+    color: #555d6e;
+    font-size: 12px;
+}
