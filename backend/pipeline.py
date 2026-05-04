@@ -13,7 +13,7 @@ startup costs low; processes would re-load Whisper per child.
 Typical use from the UI thread:
 
     from backend.pipeline import analyze_video
-    result = analyze_video("path/to/video.mp4", output_dir="analysis/")
+    non_content_list, path_to_non_content_json = analyze_video("path/to/video.mp4", output_dir="analysis/")
 
 Author: Jesus Ramos
 """
@@ -44,7 +44,7 @@ except ImportError as _e:
 
 # ==== Public API ========================================================
 
-def analyze_video(video_path, output_dir=None, write_intermediates: bool = True, debug: bool = False) -> dict:
+def analyze_video(video_path, output_dir=None, write_intermediates: bool = True, debug: bool = False) -> tuple[list, Path]:
     """
     Run the full analysis pipeline on one video.
 
@@ -60,7 +60,7 @@ def analyze_video(video_path, output_dir=None, write_intermediates: bool = True,
 
     Returns
     -------
-    dict with a "timeline_segments" list (see classifier.classify docstring).
+    tuple containing list with non-content dicts (see classifier.classify docstring) and Path to non-content json.
     """
     video_path = Path(video_path)
     if not video_path.exists():
@@ -95,14 +95,21 @@ def analyze_video(video_path, output_dir=None, write_intermediates: bool = True,
     print("[pipeline] fusing modalities via classifier")
     timeline = classify(audio_data, text_data, scene_data, video_data, debug=debug)
 
+    # extract just the segments that are not labeled as video_content
+    non_content_segments = _extract_non_content_segment_info(timeline)
+    non_content_json_path = out_dir / f"{video_path.stem}_non_content_segments.json"
+
     if write_intermediates:
         timeline_path = out_dir / f"{video_path.stem}_timeline.json"
         _write_json(timeline_path, timeline)
         print(f"[pipeline] timeline written to {timeline_path}")
 
+        _write_json(non_content_json_path, non_content_segments)
+        print(f"[pipeline] non-content data written to {non_content_json_path}")
+
     total = time.time() - t_start
-    print(f"[pipeline] done in {total:.1f}s  ({len(timeline['timeline_segments'])} segments)")
-    return timeline
+    print(f"[pipeline] done in {total:.1f}s  ({len(non_content_segments)} non-content segments, {len(timeline['timeline_segments'])} total segments)")
+    return non_content_segments, non_content_json_path
 
 
 # ==== Per-modality wrappers =============================================
@@ -188,6 +195,30 @@ def _write_json(path: Path, data: dict) -> None:
     with open(path, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2, default=str)
 
+def _extract_non_content_segment_info(timeline_dict) -> list:
+    """
+    Helper function to extract specifically non-content segment info from the video analyzer dict
+    Fields to extract:
+    (start_seconds, end_seconds, type) for types that are not labeld as 'video_content'
+
+    Returns
+    -------
+    A list of dicts where the list has the following format...
+    [{"start_seconds": 123.45, "end_seconds": 678.90, "content_type": "intro"}, {"start_seconds": 789.90, "end_seconds": 12345.90, "content_type": "self_promo"}, ...]
+    """
+    non_content_list = []
+    segments_list = timeline_dict.get("timeline_segments", []) if timeline_dict else []
+    
+    for segment in segments_list:
+        start_s = segment.get("start_seconds", None) if segment else None
+        end_s = segment.get("end_seconds", None) if segment else None
+        content_type = segment.get("type", None) if segment else None
+
+        if start_s is not None and end_s is not None and content_type is not None and content_type != "video_content":
+            non_content_list.append({"start_seconds": float(start_s), "end_seconds": float(end_s), "content_type": str(content_type)})
+
+    return non_content_list
+
 
 # ==== CLI entry point ===================================================
 
@@ -231,19 +262,18 @@ if __name__ == "__main__":
 
     cli_start = time.time()
 
-    result = analyze_video(
+    result, result_path = analyze_video(
         args.video_path,
         output_dir=args.output_dir,
         debug=args.debug,
         write_intermediates=not args.no_write
     )
 
-    print("\n---- timeline summary ----")
-    for seg in result["timeline_segments"]:
+    print("\n---- non-content segment summary ----")
+    for seg in result:
         print(
-            f"  {seg['type']:14s}  "
+            f"  {seg['content_type']:14s}  "
             f"{seg['start_seconds']:7.2f}s – {seg['end_seconds']:7.2f}s  "
-            f"({seg['duration_seconds']:.1f}s)"
         )
 
     total_elapsed = time.time() - cli_start
