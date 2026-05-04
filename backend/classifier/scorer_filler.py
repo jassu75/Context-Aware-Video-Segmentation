@@ -54,7 +54,7 @@ def score(audio_data, text_data, scene_data, video_data, scores, debug=False):
 # ==== Helper Functions ===========================================================
 
 def _filler_words_detected(text_window) -> bool:
-    hasFillerWords = True
+    hasWords = False
     if text_window and text_window.get("features") and text_window.get("features").get("word_count") and text_window.get("features").get("has_recap_filler") == True:
         hasWords = True
     return hasWords
