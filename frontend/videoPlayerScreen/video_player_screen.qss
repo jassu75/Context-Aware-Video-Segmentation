@@ -1,0 +1,218 @@
+
+/* ── Base ──────────────────────────────────────────────────── */
+QMainWindow, QWidget {
+    background-color: #1a1d24;
+    color: #eaecf2;
+    font-family: "Segoe UI", "SF Pro Display", "Helvetica Neue", Arial, sans-serif;
+    font-size: 13px;
+}
+
+/* ── Header ────────────────────────────────────────────────── */
+QLabel#titleLabel {
+    font-size: 15px;
+    font-weight: 700;
+    color: #eaecf2;
+}
+
+QPushButton#openBtn {
+    background-color: #2e3140;
+    color: #c8cad4;
+    border: 1px solid #3a3f52;
+    border-radius: 6px;
+    padding: 6px 14px;
+    font-size: 12px;
+    font-weight: 600;
+}
+QPushButton#openBtn:hover  { background-color: #383c50; color: #ffffff; }
+QPushButton#openBtn:pressed{ background-color: #252830; }
+
+/* ── Video widget ──────────────────────────────────────────── */
+QVideoWidget#videoWidget {
+    background-color: #000000;
+    border-radius: 8px;
+}
+
+/* ── Now-playing badge ─────────────────────────────────────── */
+QLabel#nowLabel {
+    font-size: 11px;
+    color: #8b8f9a;
+    padding: 2px 0;
+}
+
+/* ── Transport buttons ─────────────────────────────────────── */
+QPushButton#transportBtn {
+    background-color: #2a2d38;
+    color: #eaecf2;
+    border: none;
+    border-radius: 20px;
+    font-size: 15px;
+}
+QPushButton#transportBtn:hover  { background-color: #363a4e; }
+QPushButton#transportBtn:pressed{ background-color: #1e2028; }
+
+/* ── Time label ────────────────────────────────────────────── */
+QLabel#timeLabel {
+    font-family: "Consolas", "Courier New", monospace;
+    font-size: 12px;
+    color: #c8cad4;
+    letter-spacing: 0.5px;
+}
+
+/* ── Volume ────────────────────────────────────────────────── */
+QLabel#volIcon { font-size: 14px; color: #8b8f9a; }
+
+QSlider#volSlider::groove:horizontal {
+    height: 4px;
+    background: #2e3140;
+    border-radius: 2px;
+}
+QSlider#volSlider::sub-page:horizontal {
+    background: #4a7cdc;
+    border-radius: 2px;
+}
+QSlider#volSlider::handle:horizontal {
+    background: #ffffff;
+    border-radius: 6px;
+    width: 12px;
+    height: 12px;
+    margin: -4px 0;
+}
+
+/* ── Timeline tick labels ──────────────────────────────────── */
+QLabel#segTickLabel {
+    font-size: 9px;
+    color: #555870;
+    padding-top: 2px;
+}
+
+/* ── Bottom action buttons ─────────────────────────────────── */
+QPushButton#playContentBtn {
+    background-color: #2d7a40;
+    color: #ffffff;
+    border: none;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 700;
+}
+QPushButton#playContentBtn:hover   { background-color: #3a9e4e; }
+QPushButton#playContentBtn:pressed { background-color: #1f5a2e; }
+QPushButton#playContentBtn[active="true"] {
+    background-color: #1f5a2e;
+    border: 2px solid #3a9e4e;
+    color: #aaffbb;
+}
+
+QPushButton#skipNcBtn {
+    background-color: #8b2318;
+    color: #ffffff;
+    border: none;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 700;
+}
+QPushButton#skipNcBtn:hover   { background-color: #c0392b; }
+QPushButton#skipNcBtn:pressed { background-color: #6a1a10; }
+QPushButton#skipNcBtn[active="true"] {
+    background-color: #c0392b;
+    border: 2px solid #e05044;
+    color: #ffd0cc;
+}
+
+/* ── Segment Overview heading ──────────────────────────────── */
+QLabel#overviewHeading {
+    font-size: 13px;
+    font-weight: 700;
+    color: #eaecf2;
+    padding-bottom: 2px;
+}
+
+/* ── Scroll area ───────────────────────────────────────────── */
+QScrollArea#segmentScroll          { border: none; background: transparent; }
+QScrollArea#segmentScroll > QWidget > QWidget { background: transparent; }
+
+QScrollBar:vertical {
+    background: #1a1d24;
+    width: 5px;
+    border-radius: 3px;
+}
+QScrollBar::handle:vertical {
+    background: #383c50;
+    border-radius: 3px;
+    min-height: 20px;
+}
+QScrollBar::add-line:vertical,
+QScrollBar::sub-line:vertical { height: 0; }
+
+/* ── Segment cards ─────────────────────────────────────────── */
+QFrame#segmentCard {
+    background-color: #22252f;
+    border: 1px solid #2e3140;
+    border-radius: 8px;
+}
+QFrame#segmentCard:hover {
+    border-color: #4a5070;
+}
+QFrame#segmentCard[active="true"][content="true"] {
+    background-color: #1a2e20;
+    border: 2px solid #3a9e4e;
+}
+QFrame#segmentCard[active="true"][content="false"] {
+    background-color: #2a1a1a;
+    border: 2px solid #c0392b;
+}
+
+QLabel#cardName {
+    font-size: 11px;
+    font-weight: 700;
+    color: #d0d3df;
+}
+QFrame#segmentCard[active="true"] QLabel#cardName { color: #ffffff; }
+
+QLabel#cardTag {
+    font-size: 9px;
+    font-weight: 700;
+    border-radius: 3px;
+    padding: 1px 5px;
+    max-width: 78px;
+    min-height: 15px;
+    max-height: 15px;
+}
+QLabel#cardTag[type="content"]    { background-color: #2d7a40; color: #aaffbb; }
+QLabel#cardTag[type="noncontent"] { background-color: #8b2318; color: #ffd0cc; }
+
+QLabel#cardTime {
+    font-family: "Consolas", "Courier New", monospace;
+    font-size: 9px;
+    color: #666a80;
+}
+
+QPushButton#cardBtn {
+    border: none;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 700;
+    color: #ffffff;
+    min-width: 72px;
+    max-width: 72px;
+    min-height: 22px;
+    max-height: 22px;
+    padding: 0;
+}
+QPushButton#cardBtn[type="content"]    { background-color: #2d7a40; }
+QPushButton#cardBtn[type="content"]:hover    { background-color: #3a9e4e; }
+QPushButton#cardBtn[type="noncontent"] { background-color: #8b2318; }
+QPushButton#cardBtn[type="noncontent"]:hover { background-color: #c0392b; }
+QPushButton#cardBtn:pressed { opacity: 0.75; }
+
+QPushButton#playContentBtn[active="false"] {
+    background-color: #2d7a40;
+    color: #e0ffe8;
+    border: 2px solid transparent;
+}
+QPushButton#playContentBtn[active="true"] {
+    background-color: #1f5a2e;
+    border: 2px solid #3a9e4e;
+    color: #aaffbb;
+    /* optional: add a glow-like feel */
+    font-style: italic;
+}
