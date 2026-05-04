@@ -45,8 +45,8 @@ from pathlib import Path
 MIN_LABEL_SCORE = 4.0
 
 # Fallback denominator for scorer normalization. Scorers can override this by
-# exporting MAX_POINTS = their total possible raw rule points.
-DEFAULT_MAX_POINTS = 10.0
+# exporting MAX_SCORE as their total possible raw rule points.
+DEFAULT_MAX_SCORE = 10.0
 
 # After labeling, fill short content gaps surrounded by the same non-content
 # label. Per-window scoring tends to fragment a real ad block into many
@@ -60,6 +60,8 @@ DEFAULT_MIN_DURATION_SEC = 3.0
 MIN_DURATION_BY_LABEL = {
     "intro": 6.0,
     "outro": 3.0,
+    "self_promo": 2.0,
+    "recap": 8.0,
 }
 
 CATEGORY_PRIORITY = [
@@ -136,6 +138,7 @@ def classify(audio_data, text_data, scene_data, video_data=None, debug: bool = F
                 i = r["window_index"]
                 window_debug[i][mod.LABEL] = r.get("debug")
 
+    scores = _normalize_scores(scores)
     labeled_windows = _label_windows(scores, window_debug if debug else None)
     labeled_windows = _smooth_labels(labeled_windows, SMOOTHING_MAX_GAP_WINDOWS)
     segments        = _merge_to_segments(labeled_windows)
@@ -150,13 +153,13 @@ def classify(audio_data, text_data, scene_data, video_data=None, debug: bool = F
     }
 
 
-def classify_from_files(audio_path, text_path, scene_path, video_path=None) -> dict:
+def classify_from_files(audio_path, text_path, scene_path, video_path=None, debug: bool = False) -> dict:
     """Same as classify() but loads JSONs from disk."""
     audio = _load_json(audio_path)
     text  = _load_json(text_path)
     scene = _load_json(scene_path)
     video = _load_json(video_path) if video_path else None
-    return classify(audio, text, scene, video)
+    return classify(audio, text, scene, video, debug=debug)
 
 
 # ==== Score array setup =================================================
@@ -190,8 +193,8 @@ def _init_scores(audio_data, text_data, video_data) -> list[dict]:
 def _normalization_scales() -> dict[str, float]:
     scales = {}
     for mod in ENABLED_SCORERS:
-        max_points = float(getattr(mod, "MAX_POINTS", DEFAULT_MAX_POINTS) or DEFAULT_MAX_POINTS)
-        scales[mod.LABEL] = max_points
+        max_score = getattr(mod, "MAX_SCORE", DEFAULT_MAX_SCORE)
+        scales[mod.LABEL] = float(max_score or DEFAULT_MAX_SCORE)
     return scales
 
 
@@ -201,7 +204,7 @@ def _normalize_scores(scores) -> list[dict]:
 
     This lets scorer owners choose natural rule weights internally while the
     classifier compares labels consistently. We intentionally do not cap here:
-    scorer MAX_POINTS should equal the total points available if all rules pass.
+    scorer MAX_SCORE should equal the total points available if all rules pass.
     """
     scales = _normalization_scales()
     normalized = []
@@ -225,14 +228,14 @@ def _label_windows(scores, window_debug=None) -> list[dict]:
     score wins; ties go to whichever category is earlier in CATEGORY_PRIORITY.
     If the winner doesn't clear MIN_LABEL_SCORE, the window is content.
     """
+    priority_index = {label: i for i, label in enumerate(CATEGORY_PRIORITY)}
+    category_labels = [m.LABEL for m in ENABLED_SCORERS]
+
     labeled = []
-
     for row in scores:
-        category_labels = [m.LABEL for m in ENABLED_SCORERS]
-
         # Build (label, score) pairs and sort by score desc, then priority.
-        pairs = [(l, row.get(l, 0.0)) for l in category_labels]
-        pairs.sort(key=lambda x: -x[1])
+        pairs = [(label, row.get(label, 0.0)) for label in category_labels]
+        pairs.sort(key=lambda p: (-p[1], priority_index.get(p[0], 999)))
 
         if pairs and pairs[0][1] >= MIN_LABEL_SCORE:
             label, score = pairs[0]

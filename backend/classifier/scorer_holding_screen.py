@@ -49,7 +49,11 @@ def score(audio_data, text_data, scene_data, video_data, scores, debug=False):
             s += PTS_SILENCE_DUR
         if dead_air_flag_val:
             s += PTS_DEAD_SPACE_FLAG
+<<<<<<< HEAD
         if has_words:
+=======
+        if not has_words:
+>>>>>>> 092b3a8ad587f644076f358ab88d65f70448d259
             s += PTS_NO_TEXT
         if still_scene_stat:
             s += PTS_STILL_FRAMES
@@ -97,6 +101,7 @@ def _silence_duration(audio_window, audio_windows_list, cur_audio_win_has_dead_a
     return dead_air_duration
 
 def _words_detected(text_window) -> bool:
+<<<<<<< HEAD
     hasWords = True
     if text_window and text_window.get("transcript") and text_window.get("transcript") == "":
         hasWords = False
@@ -105,6 +110,16 @@ def _words_detected(text_window) -> bool:
     if text_window and text_window.get("features") and text_window.get("features").get("word_count") and text_window.get("features").get("word_count") == 0:
         hasWords = False
     return hasWords
+=======
+    if not text_window:
+        return False
+    features = text_window.get("features", {})
+    if "word_count" in features:
+        return int(features.get("word_count") or 0) > 0
+    if "words" in text_window:
+        return len(text_window.get("words") or []) > 0
+    return bool((text_window.get("transcript") or "").strip())
+>>>>>>> 092b3a8ad587f644076f358ab88d65f70448d259
 
 def _still_scenes(video_windows, cur_win_idx) -> bool:
     cur_win = at(video_windows, cur_win_idx)
