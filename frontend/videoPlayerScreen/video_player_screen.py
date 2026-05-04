@@ -44,7 +44,7 @@ def build_segments(non_content: list, total_s: float) -> list:
 # ── Clickable Timeline ──────────────────────────────────────────────────────────
 
 class TimelineBar(QWidget):
-    seeked = pyqtSignal(float) 
+    seeked = pyqtSignal(float)
 
     C_CONTENT    = QColor("#3a9e4e")
     C_NONCONTENT = QColor("#c0392b")
@@ -54,8 +54,8 @@ class TimelineBar(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.segments: list = []
-        self.total: float   = 1.0
+        self.segments: list  = []
+        self.total: float    = 1.0
         self.position: float = 0.0
         self.setFixedHeight(32)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -176,11 +176,11 @@ class PlayerWindow(QMainWindow):
         self.setWindowTitle("Segmentation Player  —  CSCI 576")
         self.setMinimumSize(1020, 660)
 
-        self.segments:    list  = []
-        self.total_s:     float = 0.0
-        self.content_only: bool = False
-        self.skip_nc:      bool = False
-        self._scrubbing:   bool = False
+        self.segments:     list  = []
+        self.total_s:      float = 0.0
+        self.content_only: bool  = False
+        self.skip_nc:      bool  = False
+        self._scrubbing:   bool  = False
 
         self._build_ui()
         self._setup_player()
@@ -212,11 +212,10 @@ class PlayerWindow(QMainWindow):
         hdr.addWidget(self.open_btn)
         root.addLayout(hdr)
 
-        # Body: video + panel
         body = QHBoxLayout()
         body.setSpacing(12)
-        body.addLayout(self._build_left(), stretch=3)
-        body.addLayout(self._build_right(), stretch=1)
+        body.addLayout(self._build_left(), stretch=1)
+        body.addLayout(self._build_right())        
         root.addLayout(body)
 
     def _build_left(self) -> QVBoxLayout:
@@ -333,6 +332,7 @@ class PlayerWindow(QMainWindow):
         scroll.setWidgetResizable(True)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         scroll.setObjectName("segmentScroll")
+        scroll.setFixedWidth(280) 
 
         self.cards_container = QWidget()
         self.cards_layout    = QVBoxLayout(self.cards_container)
@@ -381,7 +381,6 @@ class PlayerWindow(QMainWindow):
         self._load(vid, jsn)
 
     def _load(self, video_path: str, json_path: str):
-        # Parse JSON
         try:
             with open(json_path, "r") as f:
                 raw = json.load(f)
@@ -389,7 +388,6 @@ class PlayerWindow(QMainWindow):
             QMessageBox.critical(self, "JSON Error", str(e))
             return
 
-        # Set video — duration comes async via durationChanged
         self.player.setSource(QUrl.fromLocalFile(os.path.abspath(video_path)))
         self._pending_json = raw
         self._video_name   = os.path.basename(video_path)
@@ -454,8 +452,7 @@ class PlayerWindow(QMainWindow):
         pos_s = self.player.position() / 1000.0
         cur   = self._seg_at(pos_s)
         idx   = self.segments.index(cur)
-        target_idx = max(idx - 1, 0)
-        self._seek_s(self.segments[target_idx]["start_seconds"])
+        self._seek_s(self.segments[max(idx - 1, 0)]["start_seconds"])
 
     def _next_segment(self):
         if not self.segments:
@@ -480,7 +477,7 @@ class PlayerWindow(QMainWindow):
 
     def _toggle_content_only(self):
         self.content_only = not self.content_only
-        self.skip_nc      = self.content_only  # keep in sync
+        self.skip_nc      = self.content_only
 
         if self.content_only:
             self.play_content_btn.setText("✓  Content Only")
@@ -514,13 +511,12 @@ class PlayerWindow(QMainWindow):
             return
         pos_s = ms / 1000.0
 
-        # Skip non-content if mode active
         if self.skip_nc and self.player.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
             cur = self._seg_at(pos_s)
             if not cur["is_content"]:
-                # Find next content segment
                 next_content = next(
-                    (s for s in self.segments if s["start_seconds"] >= cur["end_seconds"] and s["is_content"]),
+                    (s for s in self.segments
+                     if s["start_seconds"] >= cur["end_seconds"] and s["is_content"]),
                     None
                 )
                 if next_content:
@@ -530,14 +526,13 @@ class PlayerWindow(QMainWindow):
                     self.player.pause()
                     return
 
-        # Update timeline
         self.timeline.set_position(pos_s / self.total_s)
         self.time_lbl.setText(f"{fmt_time(pos_s)} / {fmt_time(self.total_s)}")
 
-        # Update cards
         cur = self._seg_at(pos_s)
         self.now_lbl.setText(
-            f"▶  {cur['content_type']}  ·  {fmt_time(cur['start_seconds'])} – {fmt_time(cur['end_seconds'])}"
+            f"▶  {cur['content_type']}  ·  "
+            f"{fmt_time(cur['start_seconds'])} – {fmt_time(cur['end_seconds'])}"
         )
         for seg, card in zip(self.segments, self.cards):
             card.set_active(seg is cur)
@@ -546,7 +541,10 @@ class PlayerWindow(QMainWindow):
         for seg in self.segments:
             if seg["start_seconds"] <= pos_s < seg["end_seconds"]:
                 return seg
-        return self.segments[-1] if self.segments else {"start_seconds": 0, "end_seconds": 0, "content_type": "", "is_content": True}
+        return self.segments[-1] if self.segments else {
+            "start_seconds": 0, "end_seconds": 0,
+            "content_type": "", "is_content": True
+        }
 
     # ── Helpers ──────────────────────────────────────────────────────────────
 
