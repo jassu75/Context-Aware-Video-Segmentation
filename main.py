@@ -3,6 +3,7 @@ import os
 from PyQt6.QtWidgets import QApplication, QWidget, QVBoxLayout
 
 from frontend.uploadScreen.upload_screen import UploadScreen
+from backend.pipeline import analyze_video
 
 
 class VideoAnalyzer(QWidget):
@@ -26,7 +27,9 @@ class VideoAnalyzer(QWidget):
         self.setLayout(layout)
 
     def handle_video_selected(self, file_path):
-        pass
+        non_content_list, non_content_json_path = analyze_video(file_path)
+        print(f'Non-Content Data from video analyzer: {non_content_list}')
+        print(f'Non-Content Segment Data available at {non_content_json_path}')
 
     def load_styles(self):
         try:
