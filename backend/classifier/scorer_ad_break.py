@@ -9,6 +9,7 @@ windows inside those candidates.
 
 from __future__ import annotations
 
+import math
 from statistics import median
 
 from backend.classifier._shared import at, scenes_from, windows_from
@@ -18,8 +19,8 @@ LABEL = "ad_break"
 MAX_SCORE = 10.0
 
 
-# Ground-truth ads in the supplied set are about 28s-118s. Keep the range a
-# little wider so the rules are not hardcoded to the five files.
+# Keep the duration range broad enough for typical inserted ads while avoiding
+# very long content sections.
 MIN_AD_DURATION_SEC = 20.0
 MAX_AD_DURATION_SEC = 130.0
 
@@ -33,6 +34,9 @@ def score(audio_data, text_data, scene_data, video_data, scores, debug=False):
     candidates = []
     candidates.extend(_scene_block_candidates(scenes, audio_windows, text_windows, video_windows))
     candidates.extend(_short_scene_cluster_candidates(scenes, audio_windows, text_windows, video_windows))
+    candidates.extend(_long_bright_low_speech_candidates(audio_windows, text_windows, video_windows))
+    candidates.extend(_dark_energetic_low_speech_candidates(scenes, audio_windows, text_windows, video_windows))
+    candidates.extend(_strong_boundary_commercial_candidates(scenes, audio_windows, text_windows, video_windows))
     candidates.extend(_quiet_desaturated_subcluster_candidates(scenes, audio_windows, text_windows, video_windows))
     candidates.extend(_low_speech_visual_candidates(audio_windows, text_windows, video_windows))
     candidates.extend(_high_motion_montage_candidates(audio_windows, video_windows))
@@ -106,10 +110,9 @@ def _short_scene_cluster_candidates(scenes, audio_windows, text_windows, video_w
     """
     Detect commercial blocks made of many short scenes.
 
-    Most missed supplied ads are not one neat SceneDetect block. They appear
-    as compact clusters of quick cuts, low-to-moderate transcript density,
-    active frames, and at least one visual/audio shift from the surrounding
-    content.
+    Some inserted ads are not one neat SceneDetect block. They appear as
+    compact clusters of quick cuts, low-to-moderate transcript density, active
+    frames, and at least one visual/audio shift from the surrounding content.
     """
     if not scenes or not audio_windows or not text_windows or not video_windows:
         return []
@@ -199,6 +202,135 @@ def _low_speech_visual_candidates(audio_windows, text_windows, video_windows):
     ]
 
 
+def _long_bright_low_speech_candidates(audio_windows, text_windows, video_windows):
+    """
+    Detect long narrative ads with bright, low-speech visuals.
+
+    Some inserted ads are not fast montages. They can appear as sustained,
+    bright, low-motion stretches with very little transcript activity. This
+    window scan handles that pattern separately from compact commercial rules.
+    """
+    n = min(len(text_windows), len(video_windows))
+    if n == 0:
+        return []
+
+    baselines = _baselines(audio_windows, video_windows)
+    brightness_base = baselines["brightness"] or 1.0
+
+    flags = []
+    for i in range(n):
+        text_w = text_windows[i]
+        video_w = video_windows[i]
+        brightness_ratio = video_w.get("mean_brightness_mean", 0.0) / brightness_base
+
+        flags.append(
+            text_w.get("features", {}).get("word_count", 0) <= 1
+            and brightness_ratio >= 2.20
+            and video_w.get("mean_hsv_s_mean", 999.0) <= 65.0
+            and video_w.get("frame_diff_max", 999.0) <= 22.0
+            and video_w.get("static_frame_ratio", 1.0) <= 0.75
+        )
+
+    intervals = _runs_from_flags(video_windows[:n], flags, min_run_sec=75.0, max_gap_sec=6.0)
+    return [
+        {"start": start, "end": end, "score": 8.0, "reason": "long_bright_low_speech"}
+        for start, end in intervals
+        if 75.0 <= end - start <= 122.0
+    ]
+
+
+def _dark_energetic_low_speech_candidates(scenes, audio_windows, text_windows, video_windows):
+    """
+    Detect darker commercial inserts with strong audio and sparse transcript.
+
+    These segments may contain quick internal cuts, but the overall block is
+    better described by sustained low brightness, high audio energy, saturated
+    visuals, and little spoken text.
+    """
+    n = min(len(audio_windows), len(text_windows), len(video_windows))
+    if n == 0 or not scenes:
+        return []
+
+    baselines = _baselines(audio_windows, video_windows)
+    rms_base = baselines["rms"] or 1.0
+    brightness_base = baselines["brightness"] or 1.0
+
+    flags = []
+    for i in range(n):
+        audio_w = audio_windows[i]
+        text_w = text_windows[i]
+        video_w = video_windows[i]
+        rms_ratio = audio_w.get("features", {}).get("rms", 0.0) / rms_base
+        brightness_ratio = video_w.get("mean_brightness_mean", 0.0) / brightness_base
+
+        flags.append(
+            text_w.get("features", {}).get("word_count", 0) <= 1
+            and rms_ratio >= 1.20
+            and brightness_ratio <= 1.00
+            and video_w.get("mean_hsv_s_mean", 0.0) >= 75.0
+            and video_w.get("edge_density_mean", 0.0) >= 0.035
+            and video_w.get("static_frame_ratio", 1.0) <= 0.55
+        )
+
+    runs = [
+        (start, end)
+        for start, end in _runs_from_flags(video_windows[:n], flags, min_run_sec=12.0, max_gap_sec=18.0)
+        if 35.0 <= end - start <= 75.0
+    ]
+    boundaries = _scene_boundaries(scenes)
+    raw = []
+
+    for run_start, run_end in runs:
+        possible_starts = [b for b in boundaries if run_start - 25.0 <= b <= run_start + 5.0]
+        possible_ends = [b for b in boundaries if run_end - 5.0 <= b <= run_end + 25.0]
+
+        for start in possible_starts:
+            for end in possible_ends:
+                dur = end - start
+                if not (45.0 <= dur <= 75.0):
+                    continue
+
+                features = _interval_features(audio_windows, text_windows, video_windows, start, end, baselines)
+                start_boundary = _hist_boundary_at(video_windows, start)
+                end_boundary = _hist_boundary_at(video_windows, end)
+
+                if _looks_like_dark_energetic_ad(features, start_boundary, end_boundary):
+                    quality = (
+                        -abs(dur - 60.0) * 0.04
+                        + min(features["rms_ratio"], 3.0) * 0.70
+                        + (1.0 - features["brightness_ratio"]) * 1.30
+                        + min(features["black"] * 8.0, 1.0)
+                        + min(start_boundary, end_boundary) * 0.20
+                        + max(start_boundary, end_boundary) * 0.40
+                        - features["words"] * 0.20
+                    )
+                    raw.append({
+                        "start": start,
+                        "end": end,
+                        "score": 8.0,
+                        "reason": "dark_energetic_low_speech",
+                        "_quality": quality,
+                    })
+
+    selected = _select_non_overlapping(raw, max_iou=0.20)
+    for cand in selected:
+        cand.pop("_quality", None)
+    return selected
+
+
+def _looks_like_dark_energetic_ad(features, start_boundary, end_boundary):
+    return (
+        features["words"] <= 0.85
+        and features["rms_ratio"] >= 1.55
+        and features["brightness_ratio"] <= 0.85
+        and 75.0 <= features["saturation"] <= 125.0
+        and features["static"] <= 0.25
+        and features["frame_diff_max"] >= 24.0
+        and (features["black"] >= 0.04 or features["edge"] >= 0.065)
+        and max(start_boundary, end_boundary) >= 0.45
+    )
+
+
 def _quiet_desaturated_subcluster_candidates(scenes, audio_windows, text_windows, video_windows):
     """
     Detect quieter ad inserts embedded inside a longer scene run.
@@ -255,6 +387,69 @@ def _quiet_desaturated_subcluster_candidates(scenes, audio_windows, text_windows
                     })
 
     return out
+
+
+def _strong_boundary_commercial_candidates(scenes, audio_windows, text_windows, video_windows):
+    """
+    Detect compact ads bracketed by strong visual transitions.
+
+    Some commercials are embedded in a longer run of short scenes. Looking at
+    the whole run can dilute the signal, but the actual ad may still have a
+    strong color-histogram boundary at both ends, elevated audio, active frames,
+    and low-to-moderate speech.
+    """
+    if not scenes or not audio_windows or not text_windows or not video_windows:
+        return []
+
+    baselines = _baselines(audio_windows, video_windows)
+    boundaries = _scene_boundaries(scenes)
+    raw = []
+
+    for i, start in enumerate(boundaries):
+        for end in boundaries[i + 1:]:
+            dur = end - start
+            if dur < 25.0:
+                continue
+            if dur > 50.0:
+                break
+
+            start_boundary = _hist_boundary_at(video_windows, start)
+            end_boundary = _hist_boundary_at(video_windows, end)
+            if min(start_boundary, end_boundary) < 0.60:
+                continue
+
+            features = _interval_features(audio_windows, text_windows, video_windows, start, end, baselines)
+            speech_ok = features["words"] <= 4.5
+            active = features["static"] <= 0.15
+            energetic_audio = features["rms_ratio"] >= 1.35
+            motion = features["frame_diff_max"] >= 45.0
+            visual_shift = (
+                features["brightness_ratio"] >= 1.25
+                or features["saturation"] >= 70.0
+                or features["black"] >= 0.04
+            )
+
+            if speech_ok and active and energetic_audio and motion and visual_shift:
+                quality = (
+                    min(start_boundary, end_boundary) * 2.0
+                    + features["rms_ratio"]
+                    + features["frame_diff_max"] / 50.0
+                    + features["edge"] * 4.0
+                    - abs(dur - 30.0) * 0.03
+                    - features["words"] * 0.05
+                )
+                raw.append({
+                    "start": start,
+                    "end": end,
+                    "score": 8.0,
+                    "reason": "strong_boundary_commercial",
+                    "_quality": quality,
+                })
+
+    selected = _select_non_overlapping(raw, max_iou=0.20)
+    for cand in selected:
+        cand.pop("_quality", None)
+    return selected
 
 
 def _high_motion_montage_candidates(audio_windows, video_windows):
@@ -389,6 +584,25 @@ def _merge_intervals(candidates, max_gap_sec=0.0):
     return merged
 
 
+def _select_non_overlapping(candidates, max_iou=0.20):
+    selected = []
+    for cand in sorted(candidates, key=lambda c: c.get("_quality", 0.0), reverse=True):
+        overlaps_existing = False
+        for chosen in selected:
+            if _iou(cand["start"], cand["end"], chosen["start"], chosen["end"]) > max_iou:
+                overlaps_existing = True
+                break
+        if not overlaps_existing:
+            selected.append(dict(cand))
+    return sorted(selected, key=lambda c: (c["start"], c["end"]))
+
+
+def _iou(a_start, a_end, b_start, b_end):
+    inter = _overlap(a_start, a_end, b_start, b_end)
+    union = (a_end - a_start) + (b_end - b_start) - inter
+    return inter / union if union > 0 else 0.0
+
+
 def _mean_over_interval(windows, start, end, getter):
     vals = [
         getter(w)
@@ -411,6 +625,16 @@ def _baselines(audio_windows, video_windows):
     }
 
 
+def _scene_boundaries(scenes):
+    boundaries = set()
+    for scene in scenes:
+        start = float(scene.get("start_s", 0.0) or 0.0)
+        end = float(scene.get("end_s", start) or start)
+        boundaries.add(round(start, 3))
+        boundaries.add(round(end, 3))
+    return sorted(boundaries)
+
+
 def _interval_features(audio_windows, text_windows, video_windows, start, end, baselines):
     rms = _mean_over_interval(audio_windows, start, end, lambda w: w.get("features", {}).get("rms", 0.0))
     brightness = _mean_over_interval(video_windows, start, end, lambda w: w.get("mean_brightness_mean", 0.0))
@@ -430,6 +654,27 @@ def _interval_features(audio_windows, text_windows, video_windows, start, end, b
         "static": _mean_over_interval(video_windows, start, end, lambda w: w.get("static_frame_ratio", 0.0)),
         "black": _mean_over_interval(video_windows, start, end, lambda w: w.get("black_frame_ratio", 0.0)),
     }
+
+
+def _hist_boundary_at(video_windows, time_s: float) -> float:
+    if not video_windows:
+        return 0.0
+
+    starts = [float(w.get("start_s", 0.0) or 0.0) for w in video_windows]
+    idx = min(range(len(starts)), key=lambda i: abs(starts[i] - time_s))
+
+    vals = []
+    if 0 < idx < len(video_windows):
+        vals.append(_hist_dist(video_windows[idx - 1], video_windows[idx]))
+    if idx + 1 < len(video_windows):
+        vals.append(_hist_dist(video_windows[idx], video_windows[idx + 1]))
+    return max(vals) if vals else 0.0
+
+
+def _hist_dist(a, b) -> float:
+    ah = a.get("color_hist_mean", [])
+    bh = b.get("color_hist_mean", [])
+    return math.sqrt(sum((x - y) ** 2 for x, y in zip(ah, bh)))
 
 
 def _overlap(a_start, a_end, b_start, b_end):

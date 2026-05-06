@@ -1,4 +1,5 @@
 .venv/
+.venv*/
 dataset/
 __pycache__/
 *.pyc
@@ -6,3 +7,4 @@ __pycache__/
 *.pyd
 test/
 output/
+sample_outputs/

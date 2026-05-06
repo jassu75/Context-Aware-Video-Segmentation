@@ -12,8 +12,8 @@ Author: Jesus Ramos
 Python Version: 3.12
 
 Usage:
-    python text_processor.py --video test_003.mp4 --output test_003_text.json
-    python text_processor.py --video test_003.mp4 --model base --window 2.0
+    python -m backend.text.text_processor --video path/to/video.mp4 --output path/to/video_text.json
+    python -m backend.text.text_processor --video path/to/video.mp4 --model base --window 2.0 --hop 1.0
 
 Dependencies:
     - openai-whisper
@@ -33,6 +33,7 @@ from dataclasses import dataclass, field
 import whisper
 import numpy as np
 import imageio_ffmpeg
+import torch
 
 
 # ==== Configuration defaults =================================================
@@ -225,8 +226,16 @@ def transcribe_audio(wav_path: str, model_name: str = WHISPER_MODEL) -> list[Tra
     Whisper's internal ffmpeg call (it would otherwise shell out to a
     system ffmpeg that might not be on PATH).
     """
-    print(f"[text] Loading Whisper model '{model_name}' ...")
-    model = whisper.load_model(model_name)
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    print(f"[text] Loading Whisper model '{model_name}' on {device} ...")
+    try:
+        model = whisper.load_model(model_name, device=device)
+    except Exception as exc:
+        if device != "cuda":
+            raise
+        print(f"[text] CUDA model load failed ({exc}); falling back to CPU")
+        device = "cpu"
+        model = whisper.load_model(model_name, device=device)
 
     print(f"[text] Loading audio from WAV ...")
     import wave
@@ -239,6 +248,7 @@ def transcribe_audio(wav_path: str, model_name: str = WHISPER_MODEL) -> list[Tra
         audio,
         word_timestamps=True,
         verbose=False,
+        fp16=(device == "cuda"),
     )
 
     segments = []

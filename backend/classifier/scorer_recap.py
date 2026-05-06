@@ -1,10 +1,10 @@
 """
 scorer_recap.py - score windows for recap / repeated boilerplate.
 
-This is transcript-first. It catches explicit recap language such as
-"previously on", "last time", and "quick recap", plus repeated transcript
-blocks that appear far apart from each other. Generic filler like "anyway" is
-not enough by itself.
+This is transcript-first. It only fires on explicit recap framing such as
+"previously on", "quick recap", "where we left off", or a repeated boilerplate
+block that appears far apart from itself. Historical narration like dates or
+"years ago" is not enough by itself.
 """
 
 from __future__ import annotations
@@ -24,20 +24,23 @@ MAX_SCORE = 10.0
 
 RECAP_PATTERNS = [
     r"\bpreviously\s+on\b",
-    r"\b(?:last|previous)\s+(?:episode|week)\b",
-    r"\blast\s+time\s+(?:we|i|you)\s+(?:talked|covered|discussed|looked|learned|saw|left|were)\b",
-    r"\bin\s+(?:the\s+)?(?:last|previous)\s+(?:video|episode|part)\b",
+    r"\bpreviously\s+in\b",
+    r"\blast\s+time\s+on\b",
+    r"\b(?:last|previous)\s+episode\b",
+    r"\b(?:in|on)\s+the\s+(?:last|previous)\s+episode\b",
+    r"\blast\s+time\s+(?:we|i|you)\s+(?:talked|covered|discussed|looked|learned|saw|left|were)(?:\s+off)?\b",
+    r"\bin\s+(?:our|the)\s+(?:last|previous)\s+(?:video|episode|part)\b",
+    r"\bin\s+part\s+(?:one|1)\b",
     r"\bquick\s+recap\b",
+    r"\blet'?s\s+recap\b",
     r"\brecap(?:ping)?\b",
-    r"\bto\s+(?:recap|summarize)\b",
-    r"\bin\s+summary\b",
-    r"\bas\s+(?:i|we)\s+(?:said|mentioned|covered|discussed)\s+(?:earlier|before|last\s+time)?\b",
-    r"\b(?:earlier|before)\s+(?:we|i)\s+(?:said|covered|discussed|looked\s+at)\b",
-    r"\bwhat\s+did\s+we\s+do\b",
-    r"\bon\s+[a-z]+\s+\d{1,2}(?:st|nd|rd|th)?,?\s+\d{4}\b",
-    r"\b\d{1,2}(?:st|nd|rd|th)?,?\s+\d{4}\s+during\s+the\b",
-    r"\bat\s+that\s+time\b",
-    r"\b\d+\s+years\s+ago\b",
+    r"\bto\s+recap\b",
+    r"\bearlier\s+on\b",
+    r"\bwhere\s+we\s+left\s+off\b",
+    r"\bwhen\s+we\s+last\s+left\b",
+    r"\blast\s+week\s+we\b",
+    r"\bin\s+the\s+last\s+part\b",
+    r"\bbefore\s+we\s+(?:continue|move\s+on)\b",
 ]
 
 
