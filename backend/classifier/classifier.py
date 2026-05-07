@@ -92,14 +92,14 @@ POSITION_CONSTRAINTS = {
 _EXPECTED_SCORERS = [
     "scorer_ad_break",
     "scorer_sponsor",
-    "scorer_self_promo",
+    #"scorer_self_promo",
     "scorer_recap",
     "scorer_intro",
     "scorer_outro",
     "scorer_transition",
-    "scorer_dead_air",
-    "scorer_holding_screen",
-    "scorer_filler",
+    #"scorer_dead_air",
+    #"scorer_holding_screen",
+    #"scorer_filler",
 ]
 
 ENABLED_SCORERS = []
