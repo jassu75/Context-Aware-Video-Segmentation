@@ -36,6 +36,7 @@ def score(audio_data, text_data, scene_data, video_data, scores, debug=False):
     candidates.extend(_short_scene_cluster_candidates(scenes, audio_windows, text_windows, video_windows))
     candidates.extend(_long_bright_low_speech_candidates(audio_windows, text_windows, video_windows))
     candidates.extend(_dark_energetic_low_speech_candidates(scenes, audio_windows, text_windows, video_windows))
+    candidates.extend(_compact_energetic_ad_candidates(scenes, audio_windows, text_windows, video_windows))
     candidates.extend(_strong_boundary_commercial_candidates(scenes, audio_windows, text_windows, video_windows))
     candidates.extend(_quiet_desaturated_subcluster_candidates(scenes, audio_windows, text_windows, video_windows))
     candidates.extend(_low_speech_visual_candidates(audio_windows, text_windows, video_windows))
@@ -92,7 +93,7 @@ def _scene_block_candidates(scenes, audio_windows, text_windows, video_windows):
         strong_visual_shift = (
             features["brightness_ratio"] <= 0.70
             or features["brightness_ratio"] >= 1.80
-            or features["black"] >= 0.04
+            or features["black"] >= 0.30
         )
 
         if sparse_speech and active_enough and strong_visual_shift:
@@ -194,11 +195,17 @@ def _low_speech_visual_candidates(audio_windows, text_windows, video_windows):
             and video_w.get("static_frame_ratio", 1.0) < 0.30
         )
 
+    baselines = _baselines(audio_windows, video_windows)
     intervals = _runs_from_flags(video_windows[:n], flags, min_run_sec=70.0, max_gap_sec=20.0)
     return [
         {"start": start, "end": end, "score": 8.0, "reason": "low_speech_visual"}
         for start, end in intervals
-        if MIN_AD_DURATION_SEC <= end - start <= MAX_AD_DURATION_SEC
+        if (
+            MIN_AD_DURATION_SEC <= end - start <= MAX_AD_DURATION_SEC
+            and _looks_like_low_speech_visual_ad(
+                _interval_features(audio_windows, text_windows, video_windows, start, end, baselines)
+            )
+        )
     ]
 
 
@@ -331,6 +338,79 @@ def _looks_like_dark_energetic_ad(features, start_boundary, end_boundary):
     )
 
 
+def _compact_energetic_ad_candidates(scenes, audio_windows, text_windows, video_windows):
+    """
+    Detect short high-energy ads with clear visual boundaries.
+
+    This covers compact commercials that have louder audio, active frames, and
+    strong scene/color transitions even when the transcript is not sparse.
+    """
+    if not scenes or not audio_windows or not text_windows or not video_windows:
+        return []
+
+    baselines = _baselines(audio_windows, video_windows)
+    boundaries = _scene_boundaries(scenes)
+    raw = []
+
+    for i, start in enumerate(boundaries):
+        for end in boundaries[i + 1:]:
+            dur = end - start
+            if dur < 24.0:
+                continue
+            if dur > 45.0:
+                break
+
+            start_boundary = _hist_boundary_at(video_windows, start)
+            end_boundary = _hist_boundary_at(video_windows, end)
+            if min(start_boundary, end_boundary) < 0.50:
+                continue
+
+            features = _interval_features(audio_windows, text_windows, video_windows, start, end, baselines)
+            if _looks_like_compact_energetic_ad(features, start_boundary, end_boundary):
+                quality = (
+                    min(start_boundary, end_boundary) * 1.50
+                    + features["rms_ratio"] * 0.50
+                    + features["frame_diff_max"] / 50.0
+                    - abs(dur - 32.0) * 0.03
+                    - features["words"] * 0.04
+                )
+                raw.append({
+                    "start": start,
+                    "end": end,
+                    "score": 8.0,
+                    "reason": "compact_energetic_ad",
+                    "_quality": quality,
+                })
+
+    selected = _select_non_overlapping(raw, max_iou=0.20)
+    for cand in selected:
+        cand.pop("_quality", None)
+    return selected
+
+
+def _looks_like_compact_energetic_ad(features, start_boundary, end_boundary):
+    return (
+        features["words"] <= 7.0
+        and features["rms_ratio"] >= 2.0
+        and (
+            features["words"] >= 4.50
+            or (
+                features["rms_ratio"] >= 2.50
+                and (features["brightness_ratio"] <= 1.45 or features["saturation"] <= 120.0)
+            )
+            or (
+                features["rms_ratio"] >= 2.25
+                and min(start_boundary, end_boundary) >= 0.75
+                and features["edge"] >= 0.085
+                and features["brightness_ratio"] <= 1.20
+            )
+        )
+        and features["frame_diff_max"] >= 34.0
+        and 75.0 <= features["saturation"] <= 150.0
+        and features["static"] <= 0.12
+    )
+
+
 def _quiet_desaturated_subcluster_candidates(scenes, audio_windows, text_windows, video_windows):
     """
     Detect quieter ad inserts embedded inside a longer scene run.
@@ -376,7 +456,7 @@ def _quiet_desaturated_subcluster_candidates(scenes, audio_windows, text_windows
                 quiet_speech = features["words"] <= 0.5 and features["rms_ratio"] <= 1.25
                 desaturated = features["saturation"] <= 75.0
                 not_static = features["static"] <= 0.60
-                enough_motion = features["frame_diff_max"] >= 30.0 or features["edge"] >= 0.075
+                enough_motion = features["frame_diff_max"] >= 30.0
 
                 if quiet_speech and desaturated and not_static and enough_motion:
                     out.append({
@@ -387,6 +467,13 @@ def _quiet_desaturated_subcluster_candidates(scenes, audio_windows, text_windows
                     })
 
     return out
+
+
+def _looks_like_low_speech_visual_ad(features):
+    return (
+        features["static"] <= 0.25
+        and features["flatness"] <= 0.06
+    )
 
 
 def _strong_boundary_commercial_candidates(scenes, audio_windows, text_windows, video_windows):
@@ -528,8 +615,10 @@ def _looks_like_text_heavy_ad_opening(features):
     return (
         features["words"] <= 0.5
         and features["static"] <= 0.20
-        and (features["frame_diff_max"] >= 25.0 or features["edge"] >= 0.08)
+        and features["frame_diff_max"] >= 25.0
+        and features["edge"] >= 0.08
         and features["saturation"] >= 65.0
+        and features["flatness"] <= 0.15
     )
 
 

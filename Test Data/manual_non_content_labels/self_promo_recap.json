@@ -110,6 +110,33 @@
           "notes": "National Geographic Documentary Films"
         }
       ]
+    },
+    "test_010": {
+      "video_file": "test_010.mp4",
+      "video_duration_min": "32:28",
+      "resolution": "640x360",
+      "segments": [
+        {
+          "segment_id": 1,
+          "type": "self_promo",
+          "start_time": "00:00:06",
+          "end_time": "00:00:08",
+          "start_seconds": 6.0,
+          "end_seconds": 8.0,
+          "duration_seconds": 2.0,
+          "notes": "Aardman Animations Presents"
+        },
+        {
+          "segment_id": 6,
+          "type": "self_promo",
+          "start_time": "00:32:25",
+          "end_time": "00:32:32",
+          "start_seconds": 1945.0,
+          "end_seconds": 1952.0,
+          "duration_seconds": 7.0,
+          "notes": "An Aardman Animation Production in association with ..."
+        }
+      ]
     }
   },
   "review_needed": []
