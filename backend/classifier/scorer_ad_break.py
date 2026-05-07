@@ -35,6 +35,7 @@ def score(audio_data, text_data, scene_data, video_data, scores, debug=False):
     candidates.extend(_scene_block_candidates(scenes, audio_windows, text_windows, video_windows))
     candidates.extend(_short_scene_cluster_candidates(scenes, audio_windows, text_windows, video_windows))
     candidates.extend(_long_bright_low_speech_candidates(audio_windows, text_windows, video_windows))
+    candidates.extend(_clean_low_speech_insert_candidates(scenes, audio_windows, text_windows, video_windows))
     candidates.extend(_dark_energetic_low_speech_candidates(scenes, audio_windows, text_windows, video_windows))
     candidates.extend(_compact_energetic_ad_candidates(scenes, audio_windows, text_windows, video_windows))
     candidates.extend(_strong_boundary_commercial_candidates(scenes, audio_windows, text_windows, video_windows))
@@ -244,6 +245,66 @@ def _long_bright_low_speech_candidates(audio_windows, text_windows, video_window
         for start, end in intervals
         if 75.0 <= end - start <= 122.0
     ]
+
+
+def _clean_low_speech_insert_candidates(scenes, audio_windows, text_windows, video_windows):
+    """
+    Detect clean, low-speech inserted clips between long content sections.
+
+    Some ads are visually simple rather than energetic: low saturation, sparse
+    speech, modest motion, and few hard visual edges. The surrounding long
+    content sections keep this from treating normal static moments as ads.
+    """
+    if not scenes or not audio_windows or not text_windows or not video_windows:
+        return []
+
+    baselines = _baselines(audio_windows, video_windows)
+    out = []
+    n = len(scenes)
+
+    for i in range(1, n - 1):
+        prev_start, prev_end = _scene_times(scenes[i - 1])
+        start, _ = _scene_times(scenes[i])
+        _, next_end = _scene_times(scenes[i + 1])
+
+        if prev_end - prev_start < 90.0:
+            continue
+
+        for j in range(i, min(i + 8, n - 1)):
+            end = _scene_times(scenes[j])[1]
+            next_start, next_end = _scene_times(scenes[j + 1])
+            dur = end - start
+
+            if dur < 25.0:
+                continue
+            if dur > 75.0:
+                break
+            if next_end - next_start < 90.0:
+                continue
+
+            features = _interval_features(audio_windows, text_windows, video_windows, start, end, baselines)
+            if _looks_like_clean_low_speech_insert(features):
+                out.append({
+                    "start": start,
+                    "end": end,
+                    "score": 8.0,
+                    "reason": "clean_low_speech_insert",
+                })
+
+    return _select_non_overlapping(out, max_iou=0.20)
+
+
+def _looks_like_clean_low_speech_insert(features):
+    return (
+        features["words"] <= 0.75
+        and features["rms_ratio"] >= 1.60
+        and 0.80 <= features["brightness_ratio"] <= 1.45
+        and features["saturation"] <= 25.0
+        and features["edge"] <= 0.070
+        and 0.20 <= features["static"] <= 0.80
+        and 12.0 <= features["frame_diff_max"] <= 35.0
+        and features["black"] <= 0.02
+    )
 
 
 def _dark_energetic_low_speech_candidates(scenes, audio_windows, text_windows, video_windows):
@@ -722,6 +783,12 @@ def _scene_boundaries(scenes):
         boundaries.add(round(start, 3))
         boundaries.add(round(end, 3))
     return sorted(boundaries)
+
+
+def _scene_times(scene):
+    start = float(scene.get("start_s", 0.0) or 0.0)
+    end = float(scene.get("end_s", start) or start)
+    return start, end
 
 
 def _interval_features(audio_windows, text_windows, video_windows, start, end, baselines):
