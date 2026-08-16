@@ -6,6 +6,9 @@ An intelligent multimodal video analysis system that automatically segments long
 
 <img width="1448" height="1086" alt="Application Preview" src="https://github.com/user-attachments/assets/02b67b42-0d90-4905-9b29-39669a54ba66" />
 
+## YouTube
+[Watch Demo](https://youtu.be/N8PHeAX5CLg?si=x29NzwvWXEtnwF1G)
+
 ## Description
 
 - Architected an end-to-end multimodal system that classifies long-form video into core versus non-core segments by combining audio frequency analysis, visual frame structure, motion detection, and speech transcripts.
